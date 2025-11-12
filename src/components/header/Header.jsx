@@ -29,95 +29,50 @@ const coordinatorHeaderList = [
     { title: "Optimize Resources", path: "/optimize" },
     { title: "Awarding", path: "/awarding" },
 ]
+// File: src/components/header/Header.jsx
 
+import { Link } from 'react-router-dom'; // Import Link for navigation
+import React, { useState, useEffect } from 'react'; // Import useState and useEffect
+import logoImage from '../../assets/logoBKBay.png'; // Corrected path assumption
 
 export default function Header() {
-    const navItems = defaultHeaderList; // This can be modified to switch between different header lists
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [showUserMenu, setShowUserMenu] = useState(false);
+  const [userAvatar, setUserAvatar] = useState('https://via.placeholder.com/36'); // Default placeholder
+  
+  // Use useEffect to fetch the random user image once when the component mounts
+  useEffect(() => {
+    // We will fetch a female avatar for Alice Smith
+    fetch('https://randomuser.me/api/?gender=female&inc=picture') // Only include picture data
+      .then(response => response.json())
+      .then(data => {
+        if (data.results && data.results.length > 0) {
+          setUserAvatar(data.results[0].picture.thumbnail); // Use 'thumbnail' for small size
+        }
+      })
+      .catch(error => {
+        console.error("Error fetching random user avatar:", error);
+        // Fallback to placeholder if fetch fails
+        setUserAvatar('https://via.placeholder.com/36'); 
+      });
+  }, []); // Empty dependency array means this runs once on mount
+  return (
+    <header className="bg-white shadow-sm py-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        {/* Logo and App Name */}
+        <div className="flex items-center">
+          <Link to="/" className="flex items-center space-x-2 text-xl font-bold text-gray-900">
+            <img src={logoImage} alt="BK BAY Logo" className="h-20 w-20" /> {/* Use your logo */}
+            <span>BK BAY</span>
+          </Link>
+        </div>
 
-    const linkClassName = ({ isActive }) =>
-        `text-base font-bold uppercase tracking-wider hover:bg-secondary transition-colors px-3 py-2 rounded-md ${
-            isActive ? "bg-secondary" : "" // Add "bg-secondary" class if the link is active
-        }`;
-    
-    const mobileLinkClassName = ({ isActive }) =>
-        `block text-base font-bold uppercase tracking-wider hover:bg-secondary transition-colors px-3 py-2 rounded-md ${
-            isActive ? "bg-secondary" : "" // Add "bg-secondary" class if the link is active
-        }`;
-
-
-    return (
-    // Set position to relative to contain the absolute mobile menu
-    <header className="bg-primary text-white shadow-md mb-4 relative">
-        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-20">
-            <div className="flex items-center justify-between h-16">
-            
-                {/* 1. Logo */}
-                <div className="shrink-0">
-                    <Link to="/" className="text-[32px] font-bold">
-                        Ecommerce
-                    </Link>
-                </div>
-
-                {/* 2. Navigation Menu (Desktop) */}
-                {/* Hidden on small screens, visible from md breakpoint up */}
-                <div className="hidden md:flex md:items-center md:space-x-10">
-                    {navItems.map((item) => (
-                        <NavLink
-                            key={item.title}
-                            to={item.path}
-                            className={linkClassName}
-                        >
-                            {item.title}
-                        </NavLink>
-                    ))}
-                </div>
-
-                {/* 3. Controls (Desktop) */}
-                {/* Hidden on small screens, visible from md breakpoint up */}
-                <div className="hidden md:flex items-center space-x-4">
-                    {/* Language Selector */}
-                    <button className="flex items-center text-sm hover:text-cyan-100 transition-colors">
-                        <span>En</span>
-                        <ChevronDownIcon />
-                    </button>
-
-                    {/* Vertical Separator */}
-                    <span className="text-white cursor-default">|</span>
-
-                    {/* Search Button */}
-                    <button className="hover:text-cyan-100 transition-colors">
-                        <span className="sr-only">Search</span>
-                        <SearchIcon />
-                    </button>
-
-                    {/* User Avatar */}
-                    <button className="shrink-0 cursor-pointer"
-                            onClick={() => setShowUserMenu(!showUserMenu)}
-                    >
-                        <span className="sr-only">My Account</span>
-                        <img
-                        className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
-                        src="https://placehold.co/40x40/E2E8F0/A0AEC0?text=User"
-                        alt="User avatar"
-                        />
-                    </button>
-                </div>
-
-                {/* 4. Mobile Menu Button (Burger Icon) */}
-                {/* Visible on small screens, hidden from md breakpoint up */}
-                <div className="md:hidden flex items-center">
-                    <button 
-                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="text-white hover:text-cyan-100 p-2 rounded-md"
-                        aria-label="Toggle menu"
-                    >
-                        {isMobileMenuOpen ? <TimesIcon /> : <BarsIcon />}
-                    </button>
-                </div>
-
-            </div>
+        {/* Navigation Links */}
+        <nav className="hidden md:flex space-x-8">
+          <Link to="/" className="text-gray-600 hover:text-[var(--color-primary)] font-medium">Home</Link>
+          <Link to="/dashboard" className="text-gray-600 hover:text-[var(--color-primary)] font-medium">Dashboard</Link>
+          <Link to="/user" className="text-gray-600 hover:text-[var(--color-primary)] font-medium">User</Link>
+          {/* Add more navigation links as needed */}
+          <Link to="/shipper-details" className="text-gray-600 hover:text-[var(--color-primary)] font-medium">Shipper Details</Link>
+          <Link to="/seller-report" className="text-gray-600 hover:text-[var(--color-primary)] font-medium">Seller Report</Link>
         </nav>
 
         {/* 5. Mobile Menu (Dropdown) */}
@@ -229,7 +184,16 @@ export default function Header() {
                 </ul>
             </div>
         )}
+        {/* User Profile */}
+        <div className="flex items-center space-x-3">
+          <span className="text-gray-700 font-medium">Alice Smith</span>
+          <img
+            className="h-9 w-9 rounded-full"
+            src={userAvatar} // Replace with a real user avatar
+            alt="User avatar"
+          />
+        </div>
+      </div>
     </header>
-    );
+  );
 }
-
