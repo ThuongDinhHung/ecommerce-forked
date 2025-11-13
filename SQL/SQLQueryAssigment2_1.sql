@@ -5,91 +5,139 @@ GO
 USE Assignment2
 GO
 
---Forgein table below
---Table 4: Entity Mapping of Review
-CREATE TABlE Review
+-- =============================================================================
+-- SECTION 1: CREATE TABLES
+-- Ensure tables are created in an order that respects foreign key dependencies.
+-- Tables with no foreign keys or only referencing "higher" tables first.
+-- =============================================================================
+
+-- Table 4: Entity Mapping of Review
+CREATE TABLE Review
 (
-	ID VARCHAR(20),
-	[Time] DATETIME2,
-	PRIMARY KEY (ID)
+    ID VARCHAR(20),
+    [Time] DATETIME2,
+    PRIMARY KEY (ID)
 )
 GO
 
---Table 5: Entity Mapping of Membership
-CREATE TABlE Membership
+-- Table 5: Entity Mapping of Membership
+CREATE TABLE Membership
 (
-	[Rank] VARCHAR(10),
-	Benefit NVARCHAR(50),
-	LoyaltyPoint INTEGER,
-	PRIMARY KEY ([Rank])
-)
-GO
---Table 10: User- Foreign key approach
-CREATE TABlE [User]
-(
-	ID VARCHAR(20),
-	Email VARCHAR(50) UNIQUE NOT NULL,
-	[Address] NVARCHAR(100),
-	Full_Name NVARCHAR(50),
-	[Rank] VARCHAR(10),
-	PRIMARY KEY (ID),
-	FOREIGN KEY ([Rank]) REFERENCES Membership([Rank]) ON UPDATE CASCADE ON DELETE SET NULL,
+    [Rank] VARCHAR(10),
+    Benefit NVARCHAR(50),
+    LoyaltyPoint INTEGER,
+    PRIMARY KEY ([Rank])
 )
 GO
 
---Table 9: Order- Foreign key approach
-CREATE TABlE [Order]
+-- Table 6: Entity Mapping of Cart (No FK dependencies yet)
+CREATE TABLE Cart
 (
-	ID VARCHAR(20),
-	Total INTEGER,
-	[Address] NVARCHAR(100),
-	UserID VARCHAR(20) NOT NULL,
-	PRIMARY KEY (ID),
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE
+    ID VARCHAR(20),
+    PRIMARY KEY (ID)
 )
 GO
 
---Table 12: Product SKU- Foreign key approach
-CREATE TABlE Product_SKU
+-- Table 10: User- Foreign key approach (depends on Membership)
+CREATE TABLE [User]
 (
-	Barcode VARCHAR(20),
-	Stock INTEGER,
-	Size INTEGER,
-	Color NVARCHAR(20),
-	Price INTEGER,
-	[Name] NVARCHAR(100),
-	ManufacturingDate DATETIME2,
-	ExpiredDate DATETIME2,
-	SellerID VARCHAR(20) NOT NULL,
-	PRIMARY KEY (Barcode),
-	FOREIGN KEY (SellerID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    ID VARCHAR(20),
+    Email VARCHAR(50) UNIQUE NOT NULL,
+    [Address] NVARCHAR(100),
+    Full_Name NVARCHAR(50),
+    [Rank] VARCHAR(10),
+    PRIMARY KEY (ID),
+    FOREIGN KEY ([Rank]) REFERENCES Membership([Rank]) ON UPDATE CASCADE ON DELETE SET NULL,
 )
 GO
 
---Table 7: Weak Entity Mapping of Order Item
-CREATE TABlE Order_item
+-- Table 20: Seller- Subclass of User (depends on [User])
+CREATE TABLE Seller
 (
-	ID VARCHAR(20),
-	OrderID VARCHAR(20),
-	Total INTEGER,
-	Quantity INTEGER,
-	Price INTEGER,
-	BARCODE VARCHAR(20) NOT NULL,
-	PRIMARY KEY (ID,OrderID),
-	FOREIGN KEY (OrderID) REFERENCES [Order](ID) ON UPDATE CASCADE ON DELETE CASCADE,
-	FOREIGN KEY (Barcode) REFERENCES Product_SKU(Barcode) ON UPDATE NO ACTION ON DELETE NO ACTION,
+    UserID VARCHAR(20),
+    PRIMARY KEY (UserID),
+    FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
 )
 GO
 
---Table 6: Entity Mapping of Cart
-CREATE TABlE Cart
+-- Table 21: Buyer- Subclass of User (depends on [User] and Cart)
+CREATE TABLE Buyer
 (
-	ID VARCHAR(20),
-	PRIMARY KEY (ID)
+    UserID VARCHAR(20),
+    CartID VARCHAR(20) UNIQUE NOT NULL,
+    PRIMARY KEY (UserID),
+    FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (CartID) REFERENCES Cart(ID) ON UPDATE CASCADE ON DELETE CASCADE,
 )
 GO
 
---Table 18: Deliver
+-- Table 22: Shipper- Subclass of User (depends on [User])
+CREATE TABLE Shipper
+(
+    UserID VARCHAR(20),
+    LicensePlate VARCHAR(20),
+    Company NVARCHAR(50),
+    PRIMARY KEY (UserID),
+    FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+)
+GO
+
+-- Table 23: Admin- Subclass of User (depends on [User])
+CREATE TABLE [Admin]
+(
+    UserID VARCHAR(20),
+    [Role] NVARCHAR(20),
+    PRIMARY KEY (UserID),
+    FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+)
+GO
+
+-- Table 12: Product SKU- Foreign key approach (depends on Seller, indirectly [User])
+CREATE TABLE Product_SKU
+(
+    Barcode VARCHAR(20),
+    Stock INTEGER,
+    Size INTEGER,
+    Color NVARCHAR(20),
+    Price INTEGER,
+    [Name] NVARCHAR(100),
+    ManufacturingDate DATETIME2,
+    ExpiredDate DATETIME2,
+    SellerID VARCHAR(20) NOT NULL,
+    PRIMARY KEY (Barcode),
+    FOREIGN KEY (SellerID) REFERENCES Seller(UserID) ON UPDATE CASCADE ON DELETE CASCADE -- Reference Seller, not User
+)
+GO
+
+-- Table 9: Order- Foreign key approach (depends on Buyer, indirectly [User])
+CREATE TABLE [Order]
+(
+    ID VARCHAR(20),
+    Total INTEGER,
+    [Address] NVARCHAR(100),
+    UserID VARCHAR(20) NOT NULL, -- This UserID should ideally be a BuyerID
+    Order_Time DATETIME2, -- Added Order_Time column for fn_GetSellerRevenue
+    PRIMARY KEY (ID),
+    FOREIGN KEY (UserID) REFERENCES Buyer(UserID) ON UPDATE CASCADE ON DELETE CASCADE -- Reference Buyer, not User
+)
+GO
+
+-- Table 7: Weak Entity Mapping of Order Item (depends on [Order] and Product_SKU)
+CREATE TABLE Order_item
+(
+    ID VARCHAR(20),
+    OrderID VARCHAR(20),
+    Total INTEGER,
+    Quantity INTEGER,
+    Price INTEGER,
+    BARCODE VARCHAR(20) NOT NULL,
+    PRIMARY KEY (ID,OrderID), -- Composite PK (ID, OrderID)
+    FOREIGN KEY (OrderID) REFERENCES [Order](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (Barcode) REFERENCES Product_SKU(Barcode) ON UPDATE NO ACTION ON DELETE NO ACTION,
+)
+GO
+
+-- Table 18: Deliver (depends on Shipper and [Order])
 CREATE TABLE Deliver (
     ShipperID VARCHAR(20),
     OrderID VARCHAR(20),
@@ -101,81 +149,35 @@ CREATE TABLE Deliver (
     FOREIGN KEY (ShipperID) REFERENCES Shipper(UserID),
     FOREIGN KEY (OrderID) REFERENCES [Order](ID)
 );
-
---My work below
---Table 19: Write review- Relationship relation approach
-CREATE TABlE Write_review
-(
-	ReviewID VARCHAR(20),
-	UserID VARCHAR(20),
-	Order_itemID VARCHAR(20),
-	OrderID VARCHAR(20),
-	PRIMARY KEY (ReviewID,UserID),
-	
-	-- SỬA LỖI: Bỏ comment và sửa FK
-	FOREIGN KEY (ReviewID) REFERENCES Review(ID) ON UPDATE CASCADE ON DELETE CASCADE,
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
-	
-	-- SỬA LỖI: Tham chiếu đến Order_item phải dùng PK phức hợp (ID, OrderID) 
-	FOREIGN KEY (Order_itemID, OrderID) REFERENCES Order_item(ID, OrderID) ON UPDATE NO ACTION ON DELETE NO ACTION
-	
-)
 GO
 
---Table 20: Seller- Subclass of User
-CREATE TABlE Seller
+-- Table 19: Write review- Relationship relation approach (depends on Review, [User], Order_item)
+CREATE TABLE Write_review
 (
-	UserID VARCHAR(20),
-	PRIMARY KEY (UserID),
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
-)
-GO
+    ReviewID VARCHAR(20),
+    UserID VARCHAR(20),
+    Order_itemID VARCHAR(20),
+    OrderID VARCHAR(20),
+    PRIMARY KEY (ReviewID,UserID),
 
---Table 21: Buyer- Subclass of User
-CREATE TABlE Buyer
-(
-	UserID VARCHAR(20),
-	CartID VARCHAR(20) UNIQUE NOT NULL,
-	PRIMARY KEY (UserID),
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
-	FOREIGN KEY (CartID) REFERENCES Cart(ID) ON UPDATE CASCADE ON DELETE CASCADE,
-)
-GO
-
---Table 22: Shipper- Subclass of User
-CREATE TABLE Shipper
-(
-	UserID VARCHAR(20),
-	LicensePlate VARCHAR(20),
-	Company NVARCHAR(50),
-	PRIMARY KEY (UserID),
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
-)
-GO
-
---Table 23: Admin- Subclass of User
-CREATE TABLE [Admin]
-(
-	UserID VARCHAR(20),
-	[Role] NVARCHAR(20),
-	PRIMARY KEY (UserID),
-	FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (ReviewID) REFERENCES Review(ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (UserID) REFERENCES [User](ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    -- Make sure Order_itemID and OrderID in Order_item refers to its composite PK
+    FOREIGN KEY (Order_itemID, OrderID) REFERENCES Order_item(ID, OrderID) ON UPDATE NO ACTION ON DELETE NO ACTION
 )
 GO
 
 
---Code trigger for total specialization of User
-/* =============================================================================
-CONSTRAINT 3 (Part 1): 
-Prevent deleting the Seller role if this is the User's last role.
-=============================================================================
-*/
+-- =============================================================================
+-- SECTION 2: TRIGGERS for Total Specialization of User
+-- =============================================================================
+
+-- Constraint 3 (Part 1): Prevent deleting the Seller role if this is the User's last role.
 CREATE TRIGGER trg_Seller_CheckTotalSpecialization
 ON Seller
 AFTER DELETE
 AS
 BEGIN
-    -- Check if the UserID that was just deleted from Seller still exists in the other 3 tables.
     IF EXISTS (
         SELECT 1 FROM deleted d
         WHERE NOT EXISTS (SELECT 1 FROM Buyer b WHERE b.UserID = d.UserID)
@@ -189,11 +191,7 @@ BEGIN
 END;
 GO
 
-/* =============================================================================
-CONSTRAINT 3 (Part 2): 
-Prevent deleting the Buyer role if this is the User's last role.
-=============================================================================
-*/
+-- Constraint 3 (Part 2): Prevent deleting the Buyer role if this is the User's last role.
 CREATE TRIGGER trg_Buyer_CheckTotalSpecialization
 ON Buyer
 AFTER DELETE
@@ -212,11 +210,7 @@ BEGIN
 END;
 GO
 
-/* =============================================================================
-CONSTRAINT 3 (Part 3): 
-Prevent deleting the Shipper role if this is the User's last role.
-=============================================================================
-*/
+-- Constraint 3 (Part 3): Prevent deleting the Shipper role if this is the User's last role.
 CREATE TRIGGER trg_Shipper_CheckTotalSpecialization
 ON Shipper
 AFTER DELETE
@@ -235,11 +229,7 @@ BEGIN
 END;
 GO
 
-/* =============================================================================
-CONSTRAINT 3 (Part 4): 
-Prevent deleting the Admin role if this is the User's last role.
-=============================================================================
-*/
+-- Constraint 3 (Part 4): Prevent deleting the Admin role if this is the User's last role.
 CREATE TRIGGER trg_Admin_CheckTotalSpecialization
 ON [Admin]
 AFTER DELETE
@@ -257,11 +247,13 @@ BEGIN
     END
 END;
 GO
---INSERT DATA
-/* =============================================================================
-STEP 1: INSERT data into tables with NO dependencies
-=============================================================================
-*/
+
+
+-- =============================================================================
+-- SECTION 3: INSERT DATA
+-- Data must be inserted in an order that respects foreign key dependencies.
+-- E.g., Membership before User, User before Seller/Buyer/Shipper/Admin, etc.
+-- =============================================================================
 
 -- Table 5: Entity Mapping of Membership
 INSERT INTO Membership ([Rank], Benefit, LoyaltyPoint)
@@ -293,13 +285,7 @@ VALUES
 ('C005');
 GO
 
-/* =============================================================================
-STEP 2: INSERT data into [User] table (depends on Membership)
-We will create users for all subclasses (Admin, Seller, Buyer, Shipper)
-to ensure we have 5 of each.
-=============================================================================
-*/
--- Table 10: User- Foreign key approach
+-- Table 10: User- Foreign key approach (depends on Membership)
 INSERT INTO [User] (ID, Email, [Address], Full_Name, [Rank])
 VALUES
 -- Admins (5 users)
@@ -327,11 +313,6 @@ VALUES
 ('U_SHP004', 'shipper4@delivery.com', '16 Ship St', 'Shipper Four', 'Silver'),
 ('U_SHP005', 'shipper5@delivery.com', '18 Ship St', 'Shipper Five', 'Bronze');
 GO
-
-/* =============================================================================
-STEP 3: INSERT data into Subclass tables (depend on [User] and Cart)
-=============================================================================
-*/
 
 -- Table 20: Seller- Subclass of User
 INSERT INTO Seller (UserID)
@@ -373,11 +354,6 @@ VALUES
 ('U_ADM005', 'HR');
 GO
 
-/* =============================================================================
-STEP 4: INSERT data into Product_SKU and [Order] (depend on subclasses)
-=============================================================================
-*/
-
 -- Table 12: Product SKU- Foreign key approach (depends on Seller)
 INSERT INTO Product_SKU (Barcode, Stock, Size, Color, Price, [Name], ManufacturingDate, ExpiredDate, SellerID)
 VALUES
@@ -390,21 +366,16 @@ VALUES
 GO
 
 -- Table 9: Order- Foreign key approach (depends on Buyer)
-INSERT INTO [Order] (ID, Total, [Address], UserID)
+INSERT INTO [Order] (ID, Total, [Address], UserID, Order_Time) -- Added Order_Time here
 VALUES
-('ORD001', 500000, '1 Buyer Lane', 'U_BUY001'), -- Alice buys Black Shoes
-('ORD002', 205000, '2 Buyer Ave', 'U_BUY002'), -- Bob buys Book and Coffee
-('ORD003', 15000000, '3 Buyer Pl', 'U_BUY003'), -- Charlie buys Laptop
-('ORD004', 1100000, '4 Buyer Rd', 'U_BUY004'), -- David buys 2x White Shoes
-('ORD005', 25000, '5 Buyer Crt', 'U_BUY005'); -- Eve buys Hammer
+('ORD001', 500000, '1 Buyer Lane', 'U_BUY001', '2023-11-10 10:00:00'), -- Alice buys Black Shoes
+('ORD002', 205000, '2 Buyer Ave', 'U_BUY002', '2023-11-10 11:30:00'), -- Bob buys Book and Coffee
+('ORD003', 15000000, '3 Buyer Pl', 'U_BUY003', '2023-11-11 09:00:00'), -- Charlie buys Laptop
+('ORD004', 1100000, '4 Buyer Rd', 'U_BUY004', '2023-11-11 14:00:00'), -- David buys 2x White Shoes
+('ORD005', 25000, '5 Buyer Crt', 'U_BUY005', '2023-11-12 08:00:00'); -- Eve buys Hammer
 GO
 
-/* =============================================================================
-STEP 5: INSERT data into Order_item (depends on [Order] and Product_SKU)
-=============================================================================
-*/
-
--- Table 7: Weak Entity Mapping of Order Item
+-- Table 7: Weak Entity Mapping of Order Item (depends on [Order] and Product_SKU)
 INSERT INTO Order_item (ID, OrderID, Total, Quantity, Price, BARCODE)
 VALUES
 ('OI_001', 'ORD001', 500000, 1, 500000, 'SKU_FASH_SHOE_B'),
@@ -415,12 +386,17 @@ VALUES
 ('OI_006', 'ORD005', 25000, 1, 25000, 'SKU_TOOL_HAMMER');
 GO
 
-/* =============================================================================
-STEP 6: INSERT data into Write_review (depends on Review, [User], Order_item)
-=============================================================================
-*/
+-- Table 18: Deliver (depends on Shipper and [Order])
+INSERT INTO Deliver (ShipperID, OrderID, VehicleID, Departure_Time, Finish_Time, Distance) VALUES
+('U_SHP001', 'ORD001', 'XE001', '2023-11-10 10:30:00', '2023-11-10 11:00:00', 5000), -- 5km
+('U_SHP001', 'ORD002', 'XE001', '2023-11-10 12:00:00', '2023-11-10 12:45:00', 8500), -- 8.5km
+('U_SHP002', 'ORD003', 'XE002', '2023-11-11 09:15:00', '2023-11-11 09:50:00', 6000), -- 6km
+('U_SHP003', 'ORD004', 'XE003', '2023-11-11 14:30:00', '2023-11-11 14:55:00', 3500), -- 3.5km
+('U_SHP002', 'ORD005', 'XE002', '2023-11-12 08:10:00', '2023-11-12 09:00:00', 10200); -- 10.2km
+GO
 
--- Table 19: Write review- Relationship relation approach
+
+-- Table 19: Write review- Relationship relation approach (depends on Review, [User], Order_item)
 INSERT INTO Write_review (ReviewID, UserID, Order_itemID, OrderID)
 VALUES
 ('RV001', 'U_BUY001', 'OI_001', 'ORD001'), -- Alice reviews Black Shoes
@@ -430,12 +406,18 @@ VALUES
 ('RV005', 'U_BUY004', 'OI_005', 'ORD004'); -- David reviews White Shoes
 GO
 
+
+PRINT '--- User table ---';
 SELECT * FROM [User]
+PRINT '--- Admin table ---';
 SELECT * FROM [Admin]
+PRINT '--- Buyer table ---';
 SELECT * FROM Buyer
+PRINT '--- Seller table ---';
 SELECT * FROM Seller
+PRINT '--- Shipper table ---';
 SELECT * FROM Shipper
+PRINT '--- Product_SKU table ---';
 SELECT * FROM Product_SKU
-
-
-
+PRINT '--- Deliver ---';
+SELECT * FROM Deliver

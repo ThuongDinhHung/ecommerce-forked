@@ -63,39 +63,51 @@ GO
 -- This assumes you have created 
 
 
+-- Drop the old version of the stored procedure if it exists
+IF OBJECT_ID('sp_GetShipperDeliveryStats', 'P') IS NOT NULL
+    DROP PROCEDURE sp_GetShipperDeliveryStats;
+GO
+
 CREATE PROCEDURE sp_GetShipperDeliveryStats
-    @MinDistance INT
+    @MinDistance INT -- Parameter: Minimum total distance delivered (in meters/km)
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-    -- Select aggregated data
-    -- Joins 3 tables: Shipper, [User], Deliver
-    SELECT
-        s.UserID,
-        u.Full_Name,
-        COUNT(d.OrderID) AS TotalOrdersDelivered, -- Aggregate function
-        SUM(d.Distance) AS TotalDistance
-    FROM
-        Shipper s
-    JOIN
-        [User] u ON s.UserID = u.ID
-    JOIN
-        Deliver d ON s.UserID = d.ShipperID
-    WHERE
-        d.Finish_Time IS NOT NULL -- WHERE clause (only count finished deliveries)
-    GROUP BY
-        s.UserID, u.Full_Name     -- GROUP BY clause
-    HAVING
-        SUM(d.Distance) > @MinDistance -- HAVING clause
-    ORDER BY
-        TotalDistance DESC;       -- ORDER BY clause
+    -- Select aggregated delivery statistics for shippers
+    -- Joins 4 tables: Shipper, [User], Deliver, and [Order]
+    SELECT
+        s.UserID,
+        u.Full_Name,
+        COUNT(d.OrderID) AS TotalOrdersDelivered,      -- Aggregate function: Count of orders
+        SUM(d.Distance) AS TotalDistance,              -- Aggregate function: Sum of delivery distances
+        SUM(o.Total) AS TotalRevenueDelivered          -- Aggregate function: Sum of order totals delivered
+    FROM
+        Shipper s
+    JOIN
+        [User] u ON s.UserID = u.ID
+    JOIN
+        Deliver d ON s.UserID = d.ShipperID
+    JOIN
+        [Order] o ON d.OrderID = o.ID                  -- Join to access Order.Total for TotalRevenueDelivered
+    WHERE
+        d.Finish_Time IS NOT NULL                      -- Filter: Only include completed deliveries
+    GROUP BY
+        s.UserID, u.Full_Name
+    HAVING
+        SUM(d.Distance) > @MinDistance                 -- Filter by aggregated total distance (as per original logic)
+    ORDER BY
+        TotalDistance DESC;                            -- Sort by total distance delivered
 END;
 GO
 
-CREATE FUNCTION fn_GetSellerRevenue
+IF OBJECT_ID('fn_GetShipperRevenue', 'FN') IS NOT NULL
+    DROP FUNCTION fn_GetShipperRevenue;
+GO
+
+CREATE FUNCTION fn_GetShipperRevenue
 (
-    @SellerID VARCHAR(20),
+    @ShipperID VARCHAR(20),   -- Changed parameter to ShipperID
     @StartDate DATETIME2,
     @EndDate DATETIME2
 )
@@ -103,65 +115,45 @@ RETURNS INT
 AS
 BEGIN
     DECLARE @TotalRevenue INT = 0;
-    DECLARE @ItemTotal INT;
+    DECLARE @OrderItemTotal INT; -- Renamed for clarity, it will store o.Total
 
-    -- 1. Parameter Validation (IF)
-    IF (@SellerID IS NULL OR @StartDate IS NULL OR @EndDate IS NULL)
-        RETURN NULL;
+    -- 1. Parameter Validation
+    -- Return 0 for INT function if parameters are invalid/null
+    IF (@ShipperID IS NULL OR @StartDate IS NULL OR @EndDate IS NULL)
+        RETURN 0;
     IF (@StartDate > @EndDate)
-        RETURN NULL;
+        RETURN 0;
 
-    -- 2. Cursor (CURSOR, LOOP)
-    -- This cursor selects the total price of all order items
-    -- sold by the specified seller within the date range.
-    DECLARE item_cursor CURSOR FOR
+    -- 2. Cursor
+    -- This cursor selects the total price of all orders delivered by the specified shipper
+    -- within the given date range (based on Finish_Time).
+    DECLARE order_cursor CURSOR FOR
         SELECT
-            oi.Total
+            o.Total -- Select the total of the Order
         FROM
-            Order_item oi
-        -- 3. Query (Query)
+            Deliver d
         JOIN
-            Product_SKU psku ON oi.BARCODE = psku.Barcode
-        JOIN
-            [Order] o ON oi.OrderID = o.ID
-        -- We need a 'CompletedTime' on the [Order] table,
-        -- assuming [Order].ID is created at the time of purchase.
-        -- For this example, we'll use OrderID creation time as "Sale Time".
+            [Order] o ON d.OrderID = o.ID -- Join with [Order] table to get Order.Total
         WHERE
-            psku.SellerID = @SellerID
-            AND CAST(o.ID AS DATETIME2) BETWEEN @StartDate AND @EndDate; -- Simplified time check
+            d.ShipperID = @ShipperID
+            AND d.Finish_Time IS NOT NULL -- Only consider completed deliveries
+            AND d.Finish_Time BETWEEN @StartDate AND @EndDate;
 
-    OPEN item_cursor;
-    FETCH NEXT FROM item_cursor INTO @ItemTotal;
+    OPEN order_cursor;
+    FETCH NEXT FROM order_cursor INTO @OrderItemTotal;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        SET @TotalRevenue = @TotalRevenue + @ItemTotal;
-        FETCH NEXT FROM item_cursor INTO @ItemTotal;
+        SET @TotalRevenue = @TotalRevenue + ISNULL(@OrderItemTotal, 0); -- Add ISNULL to handle potential NULLs safely
+        FETCH NEXT FROM order_cursor INTO @OrderItemTotal;
     END;
 
-    CLOSE item_cursor;
-    DEALLOCATE item_cursor;
+    CLOSE order_cursor;
+    DEALLOCATE order_cursor;
 
     RETURN @TotalRevenue;
 END;
 GO
-
-/* -- This function assumes Table 18 (Deliver) exists.
--- If not, create it first:
-CREATE TABLE Deliver (
-    ShipperID VARCHAR(20),
-    OrderID VARCHAR(20),
-    VehicleID VARCHAR(20),
-    Finish_Time DATETIME2,
-    Departure_Time DATETIME2,
-    Distance INT,
-    PRIMARY KEY (ShipperID, OrderID),
-    FOREIGN KEY (ShipperID) REFERENCES Shipper(UserID) ON UPDATE CASCADE ON DELETE NO ACTION,
-    FOREIGN KEY (OrderID) REFERENCES [Order](ID) ON UPDATE CASCADE ON DELETE NO ACTION
-);
-GO
-*/
 
 CREATE FUNCTION fn_GetSellerProductReport
 (
@@ -229,6 +221,54 @@ BEGIN
     RETURN;
 END;
 GO
-
+DELETE FROM Order_item
+WHERE ID = 'OI_002' AND OrderID = 'ORD001' AND BARCODE = 'SKU_BOOK_DB';
+PRINT '--- Product report for  U_SEL001---';
 SELECT *
 FROM dbo.fn_GetSellerProductReport('U_SEL001');
+
+PRINT '--- UpdateOrderTotal ---';
+SELECT ID, Total FROM [Order] WHERE ID = 'ORD001'; -- Change 'ORD001' by OrderID
+
+INSERT INTO Order_item (ID,OrderID, BARCODE, Quantity, Total)
+VALUES ('OI_002','ORD001', 'SKU_BOOK_DB', 2, 100000);
+
+PRINT 'Order_item inserted. Checking Order.Total...';
+
+SELECT ID, Total FROM [Order] WHERE ID = 'ORD001';
+
+UPDATE Order_item
+SET Quantity = 3, Total = 150000
+WHERE OrderID = 'ORD001' AND BARCODE = 'SKU_BOOK_DB';
+
+PRINT 'Order_item updated. Checking Order.Total again...';
+SELECT ID, Total FROM [Order] WHERE ID = 'ORD001';
+
+DELETE FROM Order_item
+WHERE OrderID = 'ORD001' AND BARCODE = 'SKU_BOOK_DB';
+
+PRINT 'Order_item deleted. Checking Order.Total one last time...';
+SELECT ID, Total FROM [Order] WHERE ID = 'ORD001';
+
+PRINT '--- End UpdateOrderTotal ---';
+
+PRINT '--- GetShipperDeliveryStats ---';
+
+EXEC sp_GetShipperDeliveryStats @MinDistance = 6000;
+
+PRINT '--- GetShipperDeliveryStats ---';
+
+PRINT '--- GetShippersByCompany ---';
+
+EXEC sp_GetShippersByCompany @Company = 'Giaohangnhanh';
+
+PRINT '--- GetShippersByCompany ---';
+
+PRINT '--- GetShipperRevenue ---';
+SELECT dbo.fn_GetShipperRevenue('U_SHP001', '2023-11-01', '2023-11-30') AS ShipperRevenue;
+
+SELECT dbo.fn_GetShipperRevenue('U_SHP002', '2023-11-01', '2023-11-30') AS ShipperRevenue;
+
+SELECT dbo.fn_GetShipperRevenue('U_SHP_UNKNOWN', '2023-11-01', '2023-11-30') AS ShipperRevenue;
+
+PRINT '--- End GetShipperRevenue ---';
