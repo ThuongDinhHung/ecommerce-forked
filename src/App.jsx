@@ -5,6 +5,7 @@ import ShoppingCart from './pages/CartPage'
 import ShipperDetails from './pages/Shipper/ShipperDetails';
 import SellerProductReport from './pages/Seller/SellerProductReport';
 import HomePage from './pages/Home/HomePage';
+import Promotion from './pages/promotion/Promotion';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
       <Route path="/cart" element={<ShoppingCart/>} />
       <Route path="/shipper-details" element={<ShipperDetails />} />
       <Route path="/seller-report" element={<SellerProductReport />} />
+      <Route path="/promotion" element={<Promotion />} />
     </Routes>
   )
 }
