@@ -1,0 +1,118 @@
+-- ========================================
+-- Assignment 2 - Tables 1-4 (Your Part)
+-- Tables: Category, Transaction, Vehicle, Review
+-- ========================================
+
+USE ASSIGNMENT2
+GO
+
+-- ========================
+-- 1. Table: Category
+-- ========================
+CREATE TABLE Category (
+    CategoryID INT PRIMARY KEY,
+    Name VARCHAR(100) NOT NULL,
+    Description VARCHAR(255)
+);
+
+-- Sample data
+INSERT INTO Category (CategoryID, Name, Description) VALUES
+(1, 'Electronics', 'Electronic devices and gadgets'),
+(2, 'Clothing', 'Apparel and fashion items'),
+(3, 'Food', 'Groceries and snacks'),
+(4, 'Books', 'Books and stationery');
+GO
+
+-- ========================
+-- 2. Table: Transaction
+-- ========================
+CREATE TABLE Transaction (
+    TransactionID INT PRIMARY KEY,
+    TransTime DATETIME NOT NULL DEFAULT GETDATE(),
+    Status VARCHAR(50) NOT NULL CHECK (Status IN ('Pending','Completed','Cancelled')),
+    Method VARCHAR(50) NOT NULL CHECK (Method IN ('Cash','Card','Online')),
+    Amount DECIMAL(10,2) NOT NULL CHECK (Amount >= 0)
+);
+
+-- Sample data
+INSERT INTO Transaction (TransactionID, TransTime, Status, Method, Amount) VALUES
+(1001, '2025-11-01 09:00', 'Completed', 'Card', 250.00),
+(1002, '2025-11-02 14:30', 'Pending', 'Online', 120.50),
+(1003, '2025-11-03 10:15', 'Cancelled', 'Cash', 0.00),
+(1004, '2025-11-03 12:00', 'Completed', 'Online', 75.99);
+GO
+
+-- ========================
+-- 3. Table: Vehicle
+-- ========================
+CREATE TABLE Vehicle (
+    VehicleID INT PRIMARY KEY,
+    Capacity INT NOT NULL CHECK (Capacity > 0),
+    Status VARCHAR(50) NOT NULL CHECK (Status IN ('Available','In Service','Maintenance')),
+    LastMaintenance DATE
+);
+
+-- Sample data
+INSERT INTO Vehicle (VehicleID, Capacity, Status, LastMaintenance) VALUES
+(201, 50, 'Available', '2025-10-01'),
+(202, 200, 'In Service', '2025-09-15'),
+(203, 10, 'Maintenance', '2025-10-20');
+GO
+
+-- ========================
+-- 4. Table: Review
+-- ========================
+CREATE TABLE Review (
+    ReviewID INT PRIMARY KEY,
+    ReviewTime DATETIME NOT NULL DEFAULT GETDATE(),
+    Content VARCHAR(500),
+    Rating INT NOT NULL CHECK (Rating BETWEEN 1 AND 5)
+);
+
+-- Sample data
+INSERT INTO Review (ReviewID, ReviewTime, Content, Rating) VALUES
+(3001, '2025-11-01 10:00', 'Good product!', 5),
+(3002, '2025-11-02 11:30', 'Average quality', 3),
+(3003, '2025-11-03 09:45', 'Poor service', 1);
+GO
+
+-- ========================
+-- 5. Sample Stored Procedure
+-- ========================
+-- Get all transactions with amount above a threshold
+CREATE PROCEDURE sp_GetTransactionsAbove
+    @MinAmount DECIMAL(10,2)
+AS
+BEGIN
+    SELECT * FROM Transaction
+    WHERE Amount >= @MinAmount
+    ORDER BY TransTime DESC;
+END;
+GO
+
+-- Test procedure
+EXEC sp_GetTransactionsAbove @MinAmount = 100.00;
+GO
+
+-- ========================
+-- 6. Optional Trigger
+-- ========================
+-- Prevent inserting a review with Rating 0
+CREATE TRIGGER trg_ReviewRatingCheck
+ON Review
+INSTEAD OF INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM inserted WHERE Rating < 1 OR Rating > 5)
+    BEGIN
+        RAISERROR('Rating must be between 1 and 5.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO Review (ReviewID, ReviewTime, Content, Rating)
+        SELECT ReviewID, ReviewTime, Content, Rating FROM inserted;
+    END
+END;
+GO
