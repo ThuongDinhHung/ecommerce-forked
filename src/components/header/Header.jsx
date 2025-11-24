@@ -7,11 +7,13 @@ import {
     FaSearch, FaChevronDown, FaBars, FaTimes,
     FaUser, FaCog, FaSignOutAlt, FaShoppingCart 
 } from 'react-icons/fa';
+import { useCart } from '../../context/CartContext';
 import logoImage from '../../assets/logoBKBay.png'; // Assuming this path is correct
 
 // --- FIX 2: Define navItems. We'll make them match the desktop nav. ---
 const navItems = [
     { title: "Home", path: "/" },
+    { title: "Shop", path: "/products" },
     { title: "Dashboard", path: "/dashboard" },
     { title: "User", path: "/user" },
     { title: "Shipper Details", path: "/shipper-details" },
@@ -19,6 +21,7 @@ const navItems = [
 ];
 
 export default function Header() {
+    const { cartItemCount } = useCart();
     const [userAvatar, setUserAvatar] = useState('https://via.placeholder.com/36');
     
     // --- FIX 3: Define missing state ---
@@ -115,7 +118,7 @@ export default function Header() {
                                         onClick={() => setShowUserMenu(false)}
                                         className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
                                     >
-                                        <FaShoppingCart className="h-5 w-5" /> My Cart
+                                        <FaShoppingCart className="h-5 w-5" /> My Cart {cartItemCount > 0 && `(${cartItemCount})`}
                                     </Link>
                                 </li>
                                 <li className="border-t border-gray-200 mt-1 pt-1">

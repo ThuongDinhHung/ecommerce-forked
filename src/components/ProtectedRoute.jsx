@@ -233,6 +233,12 @@ const ProtectedRoute = ({ children }) => {
         return <Navigate to="/shipper-details" replace />;
         }
     }
+
+    // Allow access to /products for any authenticated user
+    if (currentPath.startsWith('/products')) {
+        return children;
+    }
+
     return children;
 };
 
