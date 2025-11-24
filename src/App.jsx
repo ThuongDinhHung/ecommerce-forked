@@ -8,7 +8,8 @@ import SellerProductReport from './pages/Seller/SellerProductReport';
 import LandingPage from './pages/Home/LandingPage';
 import Promotion from './pages/promotion/Promotion';
 import UserDetails from './pages/User/UserDetails';
-import LoginPage from './pages/Login/loginPage';
+import LoginPage from './pages/Login/LoginPage';
+import ProductListingPage from './pages/Products/ProductListingPage';
 
 function App() {
   return (
@@ -46,6 +47,11 @@ function App() {
       <Route path="/user" element={
         <ProtectedRoute>
           <UserDetails />
+        </ProtectedRoute>
+      } />
+      <Route path="/products" element={
+        <ProtectedRoute>
+          <ProductListingPage />
         </ProtectedRoute>
       } />
     </Routes>

@@ -1,0 +1,42 @@
+[
+  {
+    "product_id": "SKU_BOOK_DB",
+    "name": "Database Systems Book",
+    "price_per_day": "120000",
+    "stock": 200,
+    "size": null,
+    "color": null,
+    "images": ["https://example.com/images/book.jpg"],
+    "sale_percentage": 0,
+    "variants": []
+  },
+  {
+    "product_id": "SKU_FASH_SHOE",
+    "name": "Running Shoes",
+    "price_per_day": "850000",
+    "stock": 0,
+    "size": null,
+    "color": null,
+    "images": ["https://example.com/images/shoes.jpg"],
+    "sale_percentage": 15,
+    "variants": [
+      { "barcode": "SKU_FASH_SHOE_B_39", "stock": 50, "size": 39, "color": "Black", "price": "850000" },
+      { "barcode": "SKU_FASH_SHOE_W_40", "stock": 30, "size": 40, "color": "White", "price": "850000" },
+      { "barcode": "SKU_FASH_SHOE_B_40", "stock": 0, "size": 40, "color": "Black", "price": "850000" }
+    ]
+  },
+  {
+    "product_id": "SKU_ELEC_HEADPHONES",
+    "name": "Wireless Headphones",
+    "price_per_day": "1200000",
+    "stock": 100,
+    "size": null,
+    "color": "Black",
+    "images": ["https://example.com/images/headphones.jpg"],
+    "sale_percentage": 0,
+    "variants": [
+        { "barcode": "SKU_ELEC_HEADPHONES_B", "stock": 100, "size": null, "color": "Black", "price": "1200000" },
+        { "barcode": "SKU_ELEC_HEADPHONES_S", "stock": 75, "size": null, "color": "Silver", "price": "1250000" }
+    ]
+  }
+]
