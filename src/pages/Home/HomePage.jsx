@@ -47,10 +47,10 @@ export default function HomePage() {
                                     Manage Shipper
                                 </button>
                                 <button 
-                                    onClick={() => navigate("/seller-report")} // Navigate to Seller Report
+                                    onClick={() => navigate("/review")} // Navigate to Seller Report
                                     className="px-8 py-3 border-2 border-white text-white font-bold rounded-full shadow-lg hover:bg-white hover:text-[var(--color-primary)] transform hover:scale-105 transition duration-300"
                                 >
-                                    View Seller Reports
+                                    Review
                                 </button>
                                 <button 
                                     onClick={() => navigate("/cart")} // Navigate to Shipper Details

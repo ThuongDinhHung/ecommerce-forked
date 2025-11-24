@@ -7,6 +7,7 @@ import SellerProductReport from './pages/Seller/SellerProductReport';
 import HomePage from './pages/Home/HomePage';
 import Promotion from './pages/promotion/Promotion';
 import UserDetails from './pages/User/UserDetails';
+import ProductReviews from './pages/Review/ProductReviews';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
       <Route path="/seller-report" element={<SellerProductReport />} />
       <Route path="/promotion" element={<Promotion />} />
       <Route path="/user" element={<UserDetails />} />
+      <Route path="/review" element={<ProductReviews />} />
     </Routes>
   )
 }
