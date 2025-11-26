@@ -57,3 +57,9 @@ export const getProductById = async (productId) => {
     const product = products.find(p => p.product_id === productId);
     return product;
 }
+
+export const getAllProducts = async () => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 200));
+  return [...products];
+};

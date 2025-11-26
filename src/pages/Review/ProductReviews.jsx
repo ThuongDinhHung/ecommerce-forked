@@ -1,369 +1,350 @@
-// ...existing code...
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import {
-  FaStar,
-  FaThumbsUp,
-  FaRegCommentDots,
-  FaImage,
-  FaEllipsisV,
-} from "react-icons/fa";
+import React, { useState, useEffect } from 'react';
+import { Star, ThumbsUp, MoreHorizontal, ChevronDown, MessageSquare } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+
+// CHỈ IMPORT REVIEW SERVICE
+import * as reviewService from '../../services/reviewService';
+
+// Import Header/Footer
 import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
 
-/*
-  ProductReviews
-  - reads productId from route param: /product/:productId/reviews
-  - fetches reviews from GET /api/reviews?productId=...
-  - posts new review to POST /api/reviews (credentials: 'include')
-  - marks helpful via POST /api/reviews/:id/helpful (credentials: 'include')
-  - simple filters: all / with media / by star rating
-  - pagination (client-side fallback)
-*/
+const ProductReviews = () => {
+  // Danh sách các loại reaction
+  const REACTION_TYPES = [
+    { id: 'like', icon: '👍', label: 'Thích', color: 'text-blue-600' },
+    { id: 'love', icon: '❤️', label: 'Yêu thích', color: 'text-red-500' },
+    { id: 'haha', icon: '😆', label: 'Haha', color: 'text-yellow-500' },
+    { id: 'wow', icon: '😮', label: 'Wow', color: 'text-yellow-500' },
+    { id: 'sad', icon: '😢', label: 'Buồn', color: 'text-yellow-500' },
+    { id: 'angry', icon: '😡', label: 'Phẫn nộ', color: 'text-orange-600' }
+  ];
 
-export default function ProductReviews() {
   const { productId: pid } = useParams();
-  const productId = Number(pid || 1);
+  const navigate = useNavigate();
 
+  const [products, setProducts] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [newReview, setNewReview] = useState({ rating: 5, content: "" });
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
 
-  // UI state
-  const [filter, setFilter] = useState({ type: "all", star: 0 }); // type: all | media
-  const [page, setPage] = useState(1);
-  const perPage = 6;
-  const [selectedImage, setSelectedImage] = useState(null);
-
+  // Load data ban đầu
   useEffect(() => {
-    fetchReviews();
-    // eslint-disable-next-line
-  }, [productId]);
-
-  const fetchReviews = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/reviews?productId=${productId}`, {
-        credentials: "include",
-        cache: "no-cache",
-      });
-      if (!res.ok) throw new Error(`Failed to load reviews (${res.status})`);
-      const data = await res.json();
-      // backend might return array or { reviews: [...] }
-      const list = Array.isArray(data) ? data : data.reviews || [];
-      // normalize items: ensure id, rating, content, createdAt/date, helpfulCount, author, media/images
-      const norm = list.map((r) => ({
-        id: r.id ?? r._id ?? r.ID,
-        rating: r.rating ?? r.stars ?? r.rate ?? 5,
-        content: r.content ?? r.text ?? r.comment ?? "",
-        date: r.date ?? r.createdAt ?? r.Time ?? null,
-        username: r.username ?? r.author ?? r.user ?? "Người dùng",
-        helpfulCount: r.helpfulCount ?? r.helpful ?? r.reactionsCount ?? 0,
-        media: r.media ?? r.images ?? r.photos ?? [],
-        raw: r,
-      }));
-      setReviews(norm);
-    } catch (err) {
-      console.error("fetchReviews:", err);
-      setError(err.message || "Error loading reviews");
-    } finally {
-      setLoading(false);
-      setPage(1);
-    }
-  };
-
-  const submitReview = async (e) => {
-    e?.preventDefault?.();
-    if (!newReview.content.trim()) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const res = await fetch("/api/reviews", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          rating: newReview.rating,
-          content: newReview.content,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Submit failed (${res.status})`);
+    const loadData = async () => {
+      // 1. Load danh sách sản phẩm cho Dropdown (Dùng ReviewService)
+      if (products.length === 0) {
+        try {
+          // SỬA Ở ĐÂY: Gọi reviewService thay vì productService
+          const allProducts = await reviewService.getAllProducts();
+          
+          if (allProducts && allProducts.length > 0) {
+            setProducts(allProducts);
+            // Nếu chưa có pid trên URL, tự động navigate đến sản phẩm đầu tiên
+            if (!pid) {
+                navigate(`/product/${allProducts[0].product_id}/reviews`);
+                return; 
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch products via ReviewService', err);
+        }
       }
-      const created = await res.json();
-      // Normalize created review shape to match state items
-      const item = {
-        id: created.id ?? created._id ?? created.ID,
-        rating: created.rating ?? newReview.rating,
-        content: created.content ?? newReview.content,
-        date: created.date ?? created.createdAt ?? new Date().toISOString(),
-        username: created.username ?? created.author ?? "Bạn",
-        helpfulCount: created.helpfulCount ?? 0,
-        media: created.media ?? [],
-        raw: created,
-      };
-      setReviews((p) => [item, ...p]);
-      setNewReview({ rating: 5, content: "" });
-    } catch (err) {
-      console.error("submitReview:", err);
-      setError(err.message || "Submit failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  const markHelpful = async (reviewId) => {
-    try {
-      const res = await fetch(`/api/reviews/${reviewId}/helpful`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(`Failed to mark helpful (${res.status})`);
-      const updated = await res.json();
-      // backend may return updated review or minimal info
-      setReviews((prev) =>
-        prev.map((r) =>
-          (r.id === reviewId)
-            ? {
-                ...r,
-                helpfulCount:
-                  updated.helpfulCount ??
-                  updated.helpful ??
-                  (r.helpfulCount ? r.helpfulCount + 1 : 1),
-                raw: updated,
+      // 2. Load Review nếu đã có pid
+      if (pid) {
+        setLoading(true);
+        setFetchError('');
+        try {
+          const list = await reviewService.getReviews(pid);
+          
+          // Vì service đã normalize dữ liệu rồi, ta có thể set trực tiếp
+          // Nhưng để chắc chắn avatar luôn hiển thị, ta map lại 1 lần nữa cho UI
+          const formattedList = list.map(item => ({
+              ...item,
+              avatar: item.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.username || 'User')}`,
+              replies: Array.isArray(item.replies) ? item.replies.map(r => ({
+                  ...r,
+                  avatar: r.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.username || 'User')}`
+              })) : []
+          }));
+
+          setReviews(formattedList);
+        } catch (err) {
+          console.error('getReviews error', err);
+          setFetchError(err.message || 'Không thể tải đánh giá');
+          setReviews([]);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setReviews([]);
+      }
+    };
+
+    loadData();
+  }, [pid, navigate]); // Bỏ products.length để tránh loop
+
+
+  // Helper function: Cập nhật state review (Optimistic Update)
+  const updateReviewState = (reviewId, reactionType, isReply = false, parentId = null) => {
+      setReviews(prevReviews => {
+          return prevReviews.map(review => {
+              // Update Review Cha
+              if (!isReply && review.id === reviewId) {
+                  const isToggleOff = review.myReaction === reactionType;
+                  return {
+                      ...review,
+                      myReaction: isToggleOff ? null : reactionType,
+                      likes: isToggleOff ? (review.likes - 1) : (review.myReaction ? review.likes : review.likes + 1)
+                  };
               }
-            : r
-        )
-      );
-    } catch (err) {
-      console.error("markHelpful:", err);
-      // non-blocking UX: we don't surface error except console
+              // Update Reply Con
+              if (isReply && review.id === parentId && review.replies) {
+                  return {
+                      ...review,
+                      replies: review.replies.map(reply => {
+                          if (reply.id === reviewId) {
+                              const isToggleOff = reply.myReaction === reactionType;
+                              return {
+                                  ...reply,
+                                  myReaction: isToggleOff ? null : reactionType,
+                                  likes: isToggleOff ? (reply.likes - 1) : (reply.myReaction ? reply.likes : reply.likes + 1)
+                              };
+                          }
+                          return reply;
+                      })
+                  };
+              }
+              return review;
+          });
+      });
+  };
+
+  // Handle Reaction Selection
+  const handleReact = async (targetId, reactionType, isReply = false, parentId = null) => {
+    // 1. Optimistic Update
+    updateReviewState(targetId, reactionType, isReply, parentId);
+
+    // 2. Call API
+    if (pid) {
+      try {
+        await reviewService.upsertReaction(targetId, reactionType);
+      } catch (err) {
+        console.error('upsertReaction error', err);
+        alert("Có lỗi xảy ra, vui lòng thử lại.");
+        // Revert nếu lỗi (gọi lại hàm update y hệt để đảo ngược)
+        updateReviewState(targetId, reactionType, isReply, parentId);
+      }
     }
   };
 
-  // derived stats
-  const stats = useMemo(() => {
-    const total = reviews.length;
-    const avg = total ? reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / total : 0;
-    const counts = [0, 0, 0, 0, 0].map((_, i) => reviews.filter((r) => Math.round(r.rating) === 5 - i).length);
-    const withMedia = reviews.filter((r) => Array.isArray(r.media) && r.media.length > 0).length;
-    return { total, avg: Number(avg.toFixed(1)), counts, withMedia };
-  }, [reviews]);
+  const renderStars = (rating) => {
+    return (
+      <div className="flex text-yellow-400 gap-0.5">
+        {[...Array(5)].map((_, i) => (
+          <Star 
+            key={i} 
+            size={14} 
+            fill={i < rating ? "currentColor" : "none"} 
+            className={i < rating ? "text-yellow-400" : "text-gray-300"}
+          />
+        ))}
+      </div>
+    );
+  };
 
-  // filtering + pagination
-  const filtered = useMemo(() => {
-    let out = reviews;
-    if (filter.type === "media") out = out.filter((r) => Array.isArray(r.media) && r.media.length > 0);
-    if (filter.star > 0) out = out.filter((r) => Math.round(r.rating) === filter.star);
-    return out;
-  }, [reviews, filter]);
+  // Component nút Reaction
+  const ReactionButton = ({ item, onReact, isReply = false, parentId = null }) => {
+    const currentReaction = REACTION_TYPES.find(r => r.id === item.myReaction);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
+    return (
+      <div className="relative group inline-block">
+        {/* Reaction Dock */}
+        <div className="absolute bottom-full left-0 hidden group-hover:block pb-2 z-20 min-w-max">
+           <div className="bg-white shadow-xl rounded-full px-2 py-1 border border-gray-100 flex gap-2 animate-fade-in-up">
+              {REACTION_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => onReact(item.id, type.id, isReply, parentId)}
+                  className="hover:scale-125 transition-transform text-2xl p-1 focus:outline-none select-none"
+                  title={type.label}
+                >
+                  {type.icon}
+                </button>
+              ))}
+           </div>
+        </div>
 
-  // helpers
-  const renderStars = (rating) =>
-    [...Array(5)].map((_, i) => (
-      <FaStar key={i} className={i < rating ? "text-yellow-400" : "text-gray-300"} />
-    ));
+        {/* Main Button */}
+        <button 
+          onClick={() => onReact(item.id, 'like', isReply, parentId)} 
+          className={`flex items-center gap-1.5 text-sm font-medium transition-colors py-1 ${currentReaction ? currentReaction.color : 'text-gray-500 hover:text-blue-600'}`}
+        >
+          {currentReaction ? (
+             <span className="text-lg leading-none">{currentReaction.icon}</span>
+          ) : (
+             <ThumbsUp size={14} />
+          )}
+          <span>{item.likes > 0 ? item.likes : 'Hữu ích?'}</span>
+          {currentReaction && <span className="text-xs font-normal text-gray-500">({currentReaction.label})</span>}
+        </button>
+      </div>
+    );
+  };
 
   return (
-    <div className="bg-white p-6 rounded-md shadow-sm min-h-screen">
+    <div className="flex flex-col min-h-screen bg-gray-100 font-sans">
       <Header />
 
-      <div className="max-w-4xl mx-auto">
-        {/* Summary */}
-        <section className="border rounded-lg p-4 mb-6 bg-white">
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-rose-600">{stats.avg || 0}</div>
-              <div className="flex justify-center mt-1">{renderStars(Math.round(stats.avg || 0))}</div>
-              <div className="text-sm text-gray-500 mt-1">{stats.total} đánh giá</div>
+      <main className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          
+          {/* Header Section */}
+          <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-baseline gap-4">
+               <h1 className="text-xl font-bold text-gray-800 uppercase">Đánh giá sản phẩm</h1>
+               <div className="flex items-center gap-2">
+                  <span className="text-5xl font-bold text-gray-800">
+                    {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '0.0'}
+                  </span>
+                  <div className="flex flex-col">
+                     {renderStars(reviews.length > 0 ? Math.round(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) : 0)}
+                     <span className="text-sm text-gray-400">trên 5</span>
+                  </div>
+               </div>
             </div>
-
-            <div className="flex-1">
-              <div className="flex flex-wrap gap-2 mb-3">
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 0 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.type === "all" && filter.star === 0 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Chọn Mã Sản Phẩm</span>
+              <div className="relative">
+                <select
+                  value={pid || ''}
+                  onChange={(e) => navigate(`/product/${e.target.value}/reviews`)}
+                  className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-1.5 pl-3 pr-8 rounded text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  Tất cả ({stats.total})
-                </button>
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 5 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.star === 5 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  5 Sao ({stats.counts[0]})
-                </button>
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 4 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.star === 4 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  4 Sao ({stats.counts[1]})
-                </button>
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 3 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.star === 3 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  3 Sao ({stats.counts[2]})
-                </button>
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 2 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.star === 2 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  2 Sao ({stats.counts[3]})
-                </button>
-                <button
-                  onClick={() => { setFilter({ type: "all", star: 1 }); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.star === 1 ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  1 Sao ({stats.counts[4]})
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setFilter((s) => ({ ...s, type: s.type === "media" ? "all" : "media" })); setPage(1); }}
-                  className={`px-3 py-1 border rounded ${filter.type === "media" ? "bg-rose-50 border-rose-300" : "bg-white"}`}
-                >
-                  Có hình ảnh / video ({stats.withMedia})
-                </button>
+                  <option value="" disabled>Chọn một sản phẩm</option>
+                  {products.map(product => (
+                    <option key={product.product_id} value={product.product_id}>
+                      {product.name} ({product.product_id})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" />
               </div>
             </div>
           </div>
-        </section>
 
-        {/* Write review form */}
-        <section className="mb-6 bg-white border rounded-lg p-4">
-          <form onSubmit={submitReview}>
-            <div className="flex items-center gap-3 mb-3">
-              <label className="text-sm">Đánh giá:</label>
-              <select
-                value={newReview.rating}
-                onChange={(e) => setNewReview((s) => ({ ...s, rating: Number(e.target.value) }))}
-                className="border px-2 py-1 rounded"
-              >
-                {[5, 4, 3, 2, 1].map((v) => (
-                  <option key={v} value={v}>{v} sao</option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              value={newReview.content}
-              onChange={(e) => setNewReview((s) => ({ ...s, content: e.target.value }))}
-              rows={3}
-              className="w-full border rounded p-2 mb-3"
-              placeholder="Viết nhận xét của bạn..."
-            />
+          {/* Filter Section */}
+          <div className="px-6 pb-6 pt-2 border-b border-gray-100">
+             <div className="flex flex-wrap gap-2">
+                 <button className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">Tất Cả ({reviews.length})</button>
+                 <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">5 Sao</button>
+                 <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">Có Bình Luận</button>
+             </div>
+          </div>
 
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-500">Bạn phải đăng nhập để gửi đánh giá</div>
-              <div>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-rose-600 text-white rounded"
-                >
-                  {submitting ? "Đang gửi..." : "Gửi đánh giá"}
-                </button>
-              </div>
-            </div>
-            {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
-          </form>
-        </section>
+       {/* Review List */}
+       <div>
+        {loading ? (
+          <div className="p-10 text-center text-gray-500">Đang tải đánh giá...</div>
+        ) : fetchError ? (
+          <div className="p-10 text-center text-red-500">{fetchError}</div>
+        ) : !pid ? (
+          <div className="p-10 text-center text-gray-500">Vui lòng chọn sản phẩm để xem đánh giá.</div>
+        ) : reviews.length === 0 ? (
+          <div className="p-10 text-center text-gray-500">Chưa có đánh giá nào cho sản phẩm này.</div>
+        ) : (
+          reviews.map((review) => (
+           <div key={review.id} className="p-6 border-b border-gray-100 last:border-none">
+            <div className="flex gap-4">
+              {/* Avatar */}
+              <img 
+                src={review.avatar} 
+                alt={review.username} 
+                className="w-10 h-10 rounded-full object-cover border border-gray-100" 
+                onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(review.username)}`; }}
+              />
 
-        {/* Reviews list */}
-        <section className="bg-white border rounded-lg p-4">
-          {loading ? (
-            <div className="text-center py-8">Đang tải đánh giá...</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">Chưa có đánh giá nào.</div>
-          ) : (
-            <>
-              <div className="space-y-4">
-                {pageItems.map((review) => (
-                  <article key={review.id} className="py-4 border-b last:border-0 flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700">
-                      {String(review.username || "U").charAt(0).toUpperCase()}
+              {/* Content */}
+              <div className="grow">
+                {/* User Info */}
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{review.username}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                        {review.date ? new Date(review.date).toLocaleString('vi-VN') : ''} 
+                        {review.variant && ` | ${review.variant}`}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium text-sm">{review.username}</div>
-                          <div className="flex items-center gap-2 text-xs text-yellow-400 mt-1">{renderStars(Math.round(review.rating))}</div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {review.date ? new Date(review.date).toLocaleString() : ""}
+                  </div>
+                  {renderStars(review.rating)}
+                </div>
+
+                {/* Main Review Text */}
+                <div className="mt-3">
+                  <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{review.content}</div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-3 flex items-center gap-6">
+                  <ReactionButton item={review} onReact={handleReact} />
+                  <button className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-blue-600">
+                    <MessageSquare size={14} />
+                    <span>Phản hồi</span>
+                  </button>
+                </div>
+
+                {/* REPLIES SECTION */}
+                {review.replies && review.replies.length > 0 && (
+                  <div className="mt-4 bg-gray-50 rounded-md p-4 space-y-4 relative">
+                    <div className="absolute -top-2 left-4 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-8 border-b-gray-50"></div>
+                             
+                    {review.replies.map(reply => (
+                      <div key={reply.id} className="flex gap-3">
+                        <img 
+                            src={reply.avatar} 
+                            alt={reply.username} 
+                            className="w-8 h-8 rounded-full object-cover" 
+                            onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(reply.username)}`; }}
+                        />
+                        <div className="grow">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-800">{reply.username}</span>
+                            <span className="text-xs text-gray-400">{reply.date ? new Date(reply.date).toLocaleString('vi-VN') : ''}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{reply.content}</p>
+                          
+                          {/* Actions cho Reply */}
+                          <div className="mt-2 flex items-center gap-4">
+                            <ReactionButton 
+                                item={reply} 
+                                onReact={handleReact} 
+                                isReply={true} 
+                                parentId={review.id} 
+                            />
+                            <button className="text-xs font-medium text-gray-500 hover:text-blue-600">Phản hồi</button>
                           </div>
                         </div>
-                        <div className="text-gray-400">
-                          <FaEllipsisV />
-                        </div>
                       </div>
-
-                      <p className="text-sm text-gray-700 mt-2 whitespace-pre-line">{review.content}</p>
-
-                      {/* media thumbnails */}
-                      {review.media && review.media.length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {review.media.slice(0, 5).map((m, idx) => {
-                            // m might be string url or object { url }
-                            const url = typeof m === "string" ? m : m.url ?? m.path ?? "";
-                            return (
-                              <button key={idx} onClick={() => setSelectedImage(url)} className="w-16 h-16 rounded overflow-hidden border">
-                                {url ? (
-                                  <img src={url} alt="media" className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400"><FaImage /></div>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-4 mt-3 text-sm text-gray-600">
-                        <button onClick={() => markHelpful(review.id)} className="flex items-center gap-2 hover:text-rose-600">
-                          <FaThumbsUp /> <span>Hữu ích</span> <span className="text-gray-400">({review.helpfulCount ?? 0})</span>
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-gray-800">
-                          <FaRegCommentDots /> Bình luận
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    ))}
+                  </div>
+                )}
               </div>
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-gray-500">Hiển thị { (page-1)*perPage + 1 } - { Math.min(page*perPage, filtered.length) } trên {filtered.length}</div>
-                <div className="flex items-center gap-2">
-                  <button disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
-                  <div className="px-3 py-1 border rounded bg-white">{page}/{totalPages}</div>
-                  <button disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* image modal */}
-        {selectedImage && (
-          <div onClick={() => setSelectedImage(null)} className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-            <div className="max-w-3xl max-h-full overflow-auto">
-              <img src={selectedImage} alt="preview" className="max-w-full max-h-[80vh] rounded" />
+                   
+              {/* More Options */}
+              <button className="text-gray-300 hover:text-gray-600 h-fit">
+                <MoreHorizontal size={18} />
+              </button>
             </div>
-          </div>
+           </div>
+          ))
         )}
-      </div>
+       </div>
+        </div>
+      </main>
 
       <Footer />
     </div>
   );
-}
-// ...existing code...
+};
+
+export default ProductReviews;

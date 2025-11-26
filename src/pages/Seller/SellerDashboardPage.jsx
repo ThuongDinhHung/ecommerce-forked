@@ -214,7 +214,20 @@ const SellerDashboardPage = () => {
           </ul>
         </nav>
         <div className="absolute bottom-0 w-64 p-4 border-t">
-            <button className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">View Storefront</button>
+            <button className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 mb-3">View Storefront</button>
+            <button 
+              onClick={async () => {
+                try {
+                  await fetch('/api/users/logout', { method: 'POST', credentials: 'include' });
+                  navigate('/login');
+                } catch (error) {
+                  console.error('Logout failed', error);
+                }
+              }}
+              className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700"
+            >
+              Logout
+            </button>
             <div className="text-center mt-4">
                 <a href="#" className="text-sm text-gray-600 hover:underline">Help & Support</a>
             </div>

@@ -9,7 +9,6 @@ const AddProductPage = () => {
 
   // Initialize state (supports simple edit mode if `location.state.product` is passed)
   const initial = location?.state?.product || {};
-  const [barCode, setBarCode] = useState(initial.Bar_code || '');
   const [productName, setProductName] = useState(initial.Name || '');
   const [description, setDescription] = useState(initial.Description || '');
   const [originalPrice, setOriginalPrice] = useState('');
@@ -45,7 +44,6 @@ const AddProductPage = () => {
 
   useEffect(() => {
     if (initial && Object.keys(initial).length > 0) {
-      setBarCode(initial.Bar_code || '');
       setProductName(initial.Name || '');
       setDescription(initial.Description || '');
       setManufacturingDate(initial.Manufacturing_date ? initial.Manufacturing_date.split('T')[0] : '');
@@ -86,14 +84,14 @@ const AddProductPage = () => {
   // Note: previews are handled inside the `UploadImages` UI component.
 
   const handleCancel = () => {
-    navigate(-1);
+    navigate('/seller/seller-dashboard');
   };
 
   const handleSave = async () => {
     setSuccessMessage('');
     setErrorMessage('');
     // Basic validation
-    if (!productName || !barCode) {
+    if (!productName) {
       setErrorMessage('Please provide at least a Product Name and Bar Code.');
       return;
     }
@@ -110,17 +108,55 @@ const AddProductPage = () => {
 
     setLoading(true);
     try {
+      let imageUrls = [];
+
+      // Upload images to AWS S3 if any files are selected
+      if (selectedFiles && selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
+
+        const uploadRes = await fetch('/api/upload/images', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        const uploadData = await uploadRes.json();
+        
+        if (!uploadRes.ok) {
+          setErrorMessage(uploadData?.message || 'Image upload failed');
+          setLoading(false);
+          return;
+        }
+
+        // Extract URLs from the response
+        if (uploadData.success && uploadData.data && uploadData.data.files) {
+          imageUrls = uploadData.data.files.map(file => file.url);
+        }
+      }
+
       const payload = {
-        Bar_code: barCode,
         Name: productName,
         Description: description,
         Manufacturing_date: manufacturingDate || null,
         Expired_date: expiredDate || null,
         variations: variants.map(v => ({ NAME: v.name, PRICE: Number(v.price), STOCK: Number(v.stock) })),
       };
+      
+      // Add image URLs to payload if we have any
+      if (imageUrls.length > 0) {
+        payload.images = imageUrls;
+      }
+      
       if (selectedCategory && typeof selectedCategory === 'string') {
         payload.category = selectedCategory;
       }
+
+      console.log('Product Details to be sent:', payload);
+      console.log('API URL:', isEdit ? `/api/seller/products/${encodeURIComponent(barCode)}` : '/api/seller/products');
+      console.log('Method:', isEdit ? 'PUT' : 'POST');
 
       const url = isEdit ? `/api/seller/products/${encodeURIComponent(barCode)}` : '/api/seller/products';
       const method = isEdit ? 'PUT' : 'POST';
@@ -134,18 +170,15 @@ const AddProductPage = () => {
       const data = await res.json().catch(()=>({}));
       if (!res.ok) {
         const msg = data?.message || data?.error || `Request failed with status ${res.status}`;
-        setErrorMessage(msg);
+        setErrorMessage(`Product Creation Failed: ${msg}`);
+        setLoading(false);
+        return;
       } else {
-        setSuccessMessage(isEdit ? 'Product updated successfully.' : 'Product created successfully.');
-        // NOTE: image upload is intentionally disabled here. The `UploadImages` component
-        // provides the selected File objects via `onFilesChange` and the integration
-        // layer should perform uploads when ready. We purposely do not call the
-        // upload service from this page.
-
-        setTimeout(()=>navigate('/seller/seller-dashboard'), 900);
+        setSuccessMessage(isEdit ? 'Product updated successfully! Redirecting...' : 'Product created successfully! Redirecting...');
+        setTimeout(()=>navigate('/seller/seller-dashboard'), 1500);
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Unexpected error');
+      setErrorMessage(`Product Creation Failed: ${err.message || 'Unexpected error'}`);
     } finally {
       setLoading(false);
     }
@@ -170,7 +203,7 @@ const AddProductPage = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <header className="bg-white border-b shadow-sm sticky top-0 z-10">
+      {/* <header className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center py-4">
             <div className="text-2xl font-bold text-blue-600">BKBAY</div>
@@ -189,7 +222,7 @@ const AddProductPage = () => {
             </div>
           </div>
         </div>
-      </header>
+      </header> */}
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
@@ -213,19 +246,6 @@ const AddProductPage = () => {
                 </div>
               )}
               {/* End message box */}
-              
-              <div className="mb-6">
-                <label htmlFor="barCode" className="block text-sm font-medium text-gray-700 mb-2">Bar Code</label>
-                 <input
-                   type="text"
-                   id="barCode"
-                   value={barCode}
-                   onChange={(e) => setBarCode(e.target.value)}
-                   placeholder="Unique barcode / SKU"
-                   className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-800 focus:ring-blue-500 focus:border-blue-500"
-                   disabled={viewOnly}
-                 />
-              </div>
               <div className="mb-6">
                 <label htmlFor="productName" className="block text-sm font-medium text-gray-700 mb-2">Product Name</label>
                  <input

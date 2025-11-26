@@ -13,14 +13,28 @@ import getCurrentUser from '../../services/userService'; // If needed for user d
 // default avatar (Gravatar 'mystery person' silhouette)
 const DEFAULT_AVATAR = 'https://www.gravatar.com/avatar/?d=mp&s=80';
 
-// --- FIX 2: Define navItems. We'll make them match the desktop nav. ---
+// Role-based menu configuration
+const ROLE_MENU_CONFIG = {
+    buyer: [
+        { key: 'profile', label: 'Profile', to: '/profile', icon: FaUser },
+        { key: 'orders', label: 'My Orders', to: '/orders', icon: FaCog },
+        { key: 'cart', label: 'My Cart', to: '/cart', icon: FaShoppingCart },
+    ],
+    shipper: [
+        { key: 'profile', label: 'Profile', to: '/profile', icon: FaUser },
+        { key: 'shipper-details', label: 'Shipper Details', to: '/shipper-details', icon: FaCog },
+        { key: 'shipper-orders', label: 'Orders', to: '/shipper/orders', icon: FaShoppingCart },
+    ],
+    // Extend here: seller, admin, etc.
+};
 
-export default function Header() {
+export default function Header({showNav=false}) {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
   
     const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR);
     const [currentUser, setCurrentUser] = useState(null);
+    const [userRole, setUserRole] = useState('');
     
     // --- FIX 3: Define missing state ---
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -60,6 +74,8 @@ export default function Header() {
                 if (userData && (userData.user || userData.data || userData)) {
                     const parsed = userData.user || userData.data || userData;
                     setCurrentUser(parsed);
+                    const r = userData.userRole
+                    setUserRole(r);
                     // If your API returns an avatar URL on the user object, prefer it
                     if (parsed.avatar) {
                         setUserAvatar(parsed.avatar);
@@ -92,6 +108,12 @@ export default function Header() {
         fetchUser();
         return () => { mounted = false; };
     }, []); // Empty dependency array means this runs once on mount
+    console.log('Header: Current user:', currentUser);
+    console.log('Header: User role:', userRole);
+    console.log('Header: Available configs:', Object.keys(ROLE_MENU_CONFIG));
+
+    const menuRole = ROLE_MENU_CONFIG[userRole] ? userRole : '';
+    console.log('Header: Menu role selected:', menuRole);
 
     return (
         // --- FIX 5: Add 'relative' to header for absolute menus ---
@@ -107,23 +129,25 @@ export default function Header() {
                 </div>
 
                 {/* Search Bar (Desktop) */}
-                <div className="hidden md:flex flex-1 max-w-md mx-8">
-                    <div className="relative w-full">
-                        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search products..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setSearchParams({ search: searchInput });
-                                }
-                            }}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                        />
+                {showNav && (
+                    <div className="hidden md:flex flex-1 max-w-md mx-8">
+                        <div className="relative w-full">
+                            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search products..."
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        setSearchParams({ search: searchInput });
+                                    }
+                                }}
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            />
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* User Profile & Menu (Desktop) */}
                 <div className="hidden md:flex items-center space-x-3 relative">
@@ -136,40 +160,27 @@ export default function Header() {
                     />
                     
                     {/* --- USER MENU DROPDOWN (DESKTOP) --- */}
-                    {showUserMenu && (
+                                        {showUserMenu && (
                         <div className="absolute top-full right-0 mt-2 w-52 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-50">
                             <ul className="py-1 text-sm text-gray-700">
                                 <li className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
                                     Welcome, {currentUser ? currentUser.Username : 'Guest'}
                                 </li>
-                                <li>
-                                    <Link
-                                        to="/profile"
-                                        onClick={() => setShowUserMenu(false)}
-                                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                                    >
-                                        <FaUser className="h-5 w-5" /> Profile
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link
-                                        to="/settings"
-                                        onClick={() => setShowUserMenu(false)}
-                                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                                    >
-                                        <FaCog className="h-5 w-5" /> Settings
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link
-                                        to="/cart"
-                                        onClick={() => setShowUserMenu(false)}
-                                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                                    >
-                                        {/* <FaShoppingCart className="h-5 w-5" /> My Cart {cartItemCount > 0 && `(${cartItemCount})`} */}
-                                        <FaShoppingCart className="h-5 w-5" /> My Cart
-                                    </Link>
-                                </li>
+                                {/* Role-specific menu (driven by ROLE_MENU_CONFIG) */}
+                                {(ROLE_MENU_CONFIG[menuRole] || []).map(item => {
+                                    const Icon = item.icon || FaUser;
+                                    return (
+                                        <li key={item.key}>
+                                            <Link
+                                                to={item.to}
+                                                onClick={() => setShowUserMenu(false)}
+                                                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                                            >
+                                                <Icon className="h-5 w-5" /> {item.label}
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
                                 <li className="border-t border-gray-200 mt-1 pt-1">
                                     <button
                                         onClick={() => {
@@ -235,32 +246,23 @@ export default function Header() {
                 {/* Divider */}
                 <div className="border-t border-gray-200 my-4"></div>
 
-                {/* Mobile User Controls (Simplified) */}
+                {/* Mobile User Controls - Role-based */}
                 <div className="flex flex-col space-y-2">
-                     <Link
-                        to="/profile"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                    >
-                        <FaUser className="h-5 w-5" /> Profile
-                    </Link>
-                     <Link
-                        to="/settings"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                    >
-                        <FaCog className="h-5 w-5" /> Settings
-                    </Link>
-                    <Link
-                        to="/cart"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
-                    >
-                        <FaShoppingCart className="h-5 w-5" /> My Cart
-                    </Link>
+                    {(ROLE_MENU_CONFIG[menuRole] || []).map(item => {
+                        const Icon = item.icon || FaUser;
+                        return (
+                            <Link
+                                key={item.key}
+                                to={item.to}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                            >
+                                <Icon className="h-5 w-5" /> {item.label}
+                            </Link>
+                        );
+                    })}
                     <button
                         onClick={() => {
-                            // Add logout logic
                             handleLogout();
                             setIsMobileMenuOpen(false);
                         }}
