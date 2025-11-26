@@ -18,6 +18,7 @@ export default function ShipperDetails() {
   const [shipperDetails, setShipperDetails] = useState(null);
   const [license, setLicense] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   // Fetch shipper details on mount
   useEffect(() => {
@@ -165,9 +166,18 @@ export default function ShipperDetails() {
             </div>
           )}
         </div>
-        <div className="p-4 bg-blue-100 rounded-lg">
-          {/* COMPONENT CHANGE: Use FaTruck instead of TruckIcon */}
-          <FaTruck className="h-12 w-12 text-primary" />
+        <div className="flex items-center gap-3">
+          <div className="p-4 bg-blue-100 rounded-lg">
+            {/* COMPONENT CHANGE: Use FaTruck instead of TruckIcon */}
+            <FaTruck className="h-12 w-12 text-primary" />
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditing((prev) => !prev)}
+            className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
+          >
+            {isEditing ? 'Close Edit' : 'Edit'}
+          </button>
         </div>
       </div>
 
@@ -202,7 +212,10 @@ export default function ShipperDetails() {
               id="license"
               value={license}
               onChange={(e) => setLicense(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-gray-900"
+              disabled={!isEditing}
+              className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm text-gray-900 ${
+                isEditing ? 'border-gray-300 focus:outline-none focus:ring-primary focus:border-primary' : 'bg-gray-50 border-gray-200'
+              }`}
             />
           </div>
 
@@ -215,7 +228,10 @@ export default function ShipperDetails() {
               id="companyName"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-gray-900"
+              disabled={!isEditing}
+              className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm text-gray-900 ${
+                isEditing ? 'border-gray-300 focus:outline-none focus:ring-primary focus:border-primary' : 'bg-gray-50 border-gray-200'
+              }`}
             >
               <option value="">Select Company</option>
               <option value="GRAB">GRAB</option>
@@ -228,27 +244,32 @@ export default function ShipperDetails() {
 
         {/* 3. Action Buttons (Footer of the form) */}
         <div className="p-6 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={() => window.location.href = '/'}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="px-4 py-2 bg-red-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-red-700 focus:outline-none"
-          >
-            Delete Shipper
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-4 py-2 bg-primary border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-secondary focus:outline-none"
-          >
-            Save Shipper
-          </button>
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  // Reset values back to loaded shipperDetails
+                  setLicense(shipperDetails?.License || shipperDetails?.LicensePlate || '');
+                  setCompanyName(shipperDetails?.Company || '');
+                  setIsEditing(false);
+                }}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSave();
+                  setIsEditing(false);
+                }}
+                className="px-4 py-2 bg-primary border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-secondary focus:outline-none"
+              >
+                Save Changes
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

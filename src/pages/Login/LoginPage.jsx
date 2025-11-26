@@ -18,6 +18,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
     const [registerSuccess, setRegisterSuccess] = useState('');
+    const [ageError, setAgeError] = useState('');
 
 
     // Form data
@@ -46,10 +47,41 @@ export default function LoginPage() {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        
+        // Calculate age when dateOfBirth changes
+        if (name === 'dateOfBirth') {
+            const age = calculateAge(value);
+            setFormData(prev => ({
+                ...prev,
+                dateOfBirth: value,
+                age: age
+            }));
+            
+            // Validate age
+            if (age !== '' && age < 13) {
+                setAgeError('You must be at least 13 years old to register.');
+            } else {
+                setAgeError('');
+            }
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        }
+    };
+
+    // Calculate age from date of birth
+    const calculateAge = (dateOfBirth) => {
+        if (!dateOfBirth) return '';
+        const today = new Date();
+        const birthDate = new Date(dateOfBirth);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
     };
 
     // --- LOGIN SUBMIT ---
@@ -92,6 +124,14 @@ export default function LoginPage() {
     // --- REGISTER SUBMIT ---
     const handleRegisterSubmit = async (e) => {
         e.preventDefault();
+        
+        // Validate age before submission
+        if (formData.age < 13) {
+            setAgeError('You must be at least 13 years old to register.');
+            return;
+        }
+        
+        setAgeError('');
         try {
             const result = await registerUser(formData);
             console.log('Register result:', result);
@@ -347,34 +387,28 @@ export default function LoginPage() {
                                     Personal Information
                                 </h3>
 
-                                {/* Age & DOB */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Age</label>
-                                        <div className="relative">
-                                            <Hash className="absolute left-3 top-3 text-primary" size={18} />
-                                            <input
-                                                type="number"
-                                                name="age"
-                                                required
-                                                className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent shadow-sm transition"
-                                                value={formData.age}
-                                                onChange={handleChange}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-                                        <input
-                                            type="date"
-                                            name="dateOfBirth"
-                                            required
-                                            className="block w-full px-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent shadow-sm transition"
-                                            value={formData.dateOfBirth}
-                                            onChange={handleChange}
-                                        />
-                                    </div>
+                                {/* Date of Birth & Calculated Age */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                                    <input
+                                        type="date"
+                                        name="dateOfBirth"
+                                        required
+                                        max={new Date().toISOString().split('T')[0]}
+                                        className="block w-full px-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent shadow-sm transition"
+                                        value={formData.dateOfBirth}
+                                        onChange={handleChange}
+                                    />
+                                    {formData.age !== '' && (
+                                        <p className="mt-1 text-sm text-slate-600">
+                                            Age: {formData.age} years old
+                                        </p>
+                                    )}
+                                    {ageError && (
+                                        <p className="mt-1 text-sm text-red-600 font-medium">
+                                            {ageError}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Phone */}

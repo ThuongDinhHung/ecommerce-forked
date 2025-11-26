@@ -5,6 +5,7 @@ import ShoppingCart from './pages/Cart/CartPage';
 import CheckoutPage from './pages/Cart/CheckoutPage';
 import PaymentPage from './pages/Payment/PaymentPage';
 import ShipperDetails from './pages/Shipper/ShipperDetails';
+import ShipperOrders from './pages/Shipper/ShipperOrders';
 import SellerProductReport from './pages/Seller/SellerProductReport';
 import LandingPage from './pages/Home/LandingPage';
 import Promotion from './pages/promotion/Promotion';
@@ -13,6 +14,7 @@ import HomePage from './pages/Home/HomePage';
 import ProductReviews from './pages/Review/ProductReviews';
 import SellerDashboardPage from './pages/Seller/SellerDashboardPage';
 import AddProductPage from './pages/Seller/AddProductPage';
+import ProfilePage from './pages/Login/ProfilePage';
 import WriteReview from './pages/Review/WriteReview';
 import LoginPage from './pages/Login/LoginPage';
 
@@ -62,6 +64,11 @@ function App() {
           <ShipperDetails />
         </ProtectedRoute>
       } />
+      <Route path="/shipper/orders" element={
+        <ProtectedRoute>
+          <ShipperOrders />
+        </ProtectedRoute>
+      } />
 
       <Route path="/seller-report" element={
         <ProtectedRoute>
@@ -94,6 +101,12 @@ function App() {
           <UserDetails />
         </ProtectedRoute>
       } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <ProfilePage />
+        </ProtectedRoute>
+      } />
+      {/* <Route path="/products" element={
 
       {/* Reviews Routes */}
       <Route path="/product/:productId/reviews" element={

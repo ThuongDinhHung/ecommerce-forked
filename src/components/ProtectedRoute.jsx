@@ -204,6 +204,7 @@ const ProtectedRoute = ({ children }) => {
         '/seller/products',
         '/seller/orders',
         '/seller/add-product',
+        '/profile'
         ];
 
         const isAllowedRoute = allowedSellerRoutes.some(route =>
@@ -223,6 +224,7 @@ const ProtectedRoute = ({ children }) => {
         '/shipper-details',
         '/shipper/products',
         '/shipper/orders',
+        '/profile'
         ];
 
         const isAllowedRoute = allowedshipperRoutes.some(route =>
@@ -232,6 +234,25 @@ const ProtectedRoute = ({ children }) => {
         if (!isAllowedRoute) {
         console.log(`shipper trying to access forbidden route: ${currentPath}, redirecting to /shipper`);
         return <Navigate to="/shipper-details" replace />;
+        }
+    }
+
+    if (userRole === 'buyer') {
+
+        const allowedBuyerRoutes = [
+            '/',
+            '/cart',
+            '/home',
+            '/profile'
+        ];
+
+        const isAllowedRoute = allowedBuyerRoutes.some(route => 
+            currentPath === route || currentPath.startsWith(route + '/')
+        );
+        
+        if (!isAllowedRoute) {
+            console.log(`Buyer trying to access forbidden route: ${currentPath}, redirecting to /`);
+            return <Navigate to="/" replace />;
         }
     }
 

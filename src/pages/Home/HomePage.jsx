@@ -98,7 +98,7 @@ const HomePage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header />
+            <Header showNav={true}/>
             
             <main className="max-w-6xl mx-auto p-6">
 
