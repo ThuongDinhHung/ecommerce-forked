@@ -145,13 +145,21 @@ export async function sendReply(reviewId, content) {
     const out = await handleResponse(res);
     if (!out.ok) throw new Error(out.body?.message || 'Failed to reply');
     
-    // Chuẩn hóa dữ liệu trả về để khớp UI
-    const r = out.body.data;
+    const r = out.body.data || {}; 
+    const username = r.username || r.Username || 'Me';
+
+    // [MỚI] Tạo một chuỗi ngẫu nhiên
+    const randomSeed = Date.now().toString() + Math.random().toString();
+
     return {
-        id: Date.now(), // Temp ID vì SQL trả về ko có ID reply
-        username: r.username || 'Me',
-        content: r.content,
-        date: r.date
+        id: Date.now(),
+        username: username,
+        content: r.content || r.Content,
+        date: r.date || r.Date || r.Time || new Date().toISOString(),
+        
+        // [SỬA] Thay username bằng randomSeed
+        // Kết quả: Mỗi lần reply sẽ ra một màu và ký tự đại diện khác nhau hoàn toàn
+        avatar: r.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${randomSeed}`
     };
 }
 
