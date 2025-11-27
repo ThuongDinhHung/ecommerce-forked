@@ -109,6 +109,34 @@ const AddProductPage = () => {
 
     setLoading(true);
     try {
+      let imageUrls = [];
+
+      // Upload images to AWS S3 if any files are selected
+      if (selectedFiles && selectedFiles.length > 0) {
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
+
+        const uploadRes = await fetch('/api/upload/images', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        const uploadData = await uploadRes.json();
+
+        if (!uploadRes.ok) {
+          setErrorMessage(uploadData?.message || 'Image upload failed');
+          setLoading(false);
+          return;
+        }
+
+        // Extract URLs from the response
+        if (uploadData.success && uploadData.data && uploadData.data.files) {
+          imageUrls = uploadData.data.files.map(file => file.url);
+        }
+      }
       // Note: Image file upload is currently disabled. To add images, upload to an external service
       // and pass the URLs via the payload.images array, or use the file selection to collect URLs.
       const payload = {
@@ -128,6 +156,10 @@ const AddProductPage = () => {
       
       if (selectedCategory && typeof selectedCategory === 'string') {
         payload.category = selectedCategory;
+      }
+
+      if (imageUrls.length > 0) {
+        payload.images = imageUrls;
       }
 
       console.log('Product Details to be sent:', payload);
