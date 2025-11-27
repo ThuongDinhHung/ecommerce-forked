@@ -76,4 +76,13 @@ Response Format: `{ success: true, data: [ ... ] }`
       "content": "Lấy từ state textarea input"
     }
     ```
-* **Post-action:** Nếu thành công -> Alert "Cảm ơn" -> Điều hướng về trang danh sách review.
+* **Post-action & Navigation Logic:**
+  * **Vấn đề:** Trước đây, sau khi submit thành công, người dùng bị điều hướng tới URL lỗi (`/product//reviews`). Nguyên nhân là do component không lấy được `productId` từ sản phẩm đã chọn trong dropdown. Thêm vào đó, có yêu cầu bổ sung nút "Xem đánh giá" để đi tới trang review của sản phẩm mà không cần gửi.
+  * **Giải pháp:**
+    1.  Một hàm mới là `handleNavigateToReviews` đã được tạo trong `WriteReview.jsx`.
+    2.  Hàm này sẽ tìm sản phẩm đang được chọn, kiểm tra một cách an toàn xem `productId` có tồn tại hay không.
+    3.  Nếu có `productId`, nó sẽ điều hướng tới trang review chính xác (`/product/${productId}/reviews`). Nếu không, nó sẽ báo lỗi.
+    4.  Hàm này được gọi ở 2 nơi:
+        *   Sau khi `POST /api/reviews` trả về thành công.
+        *   Khi người dùng nhấn nút "Xem đánh giá".
+  * **Ghi chú về dữ liệu:** Có một giả thuyết rằng API `GET /api/reviews/me/purchased` thực chất đã trả về mã `barcode` của sản phẩm trong mỗi `OrderItem`. Tuy nhiên, file `reviewService.js` ở frontend có thể đã không map trường dữ liệu này vào thành thuộc tính `productId` trong object trả về, dẫn đến component không có được thông tin này. Đây là một điểm cần kiểm tra lại để đảm bảo sự đồng bộ giữa backend và frontend.

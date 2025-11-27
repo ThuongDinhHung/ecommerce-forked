@@ -5,68 +5,113 @@ import Footer from '../../components/footer/Footer';
 import { FiChevronDown } from 'react-icons/fi';
 
 import getCurrentUser from '../../services/userService';
-
-const sampleItems = [
-  {
-    id: 1,
-    title: 'Paper Film Like screen protector for Samsung Galaxy',
-    price: 55.0,
-    qty: 1,
-    thumbnail: 'https://images.unsplash.com/photo-1580910051073-9b0b1a6d2b7e?q=80&w=200&auto=format&fit=crop'
-  },
-  {
-    id: 2,
-    title: 'Screen repair insurance',
-    price: 23.99,
-    qty: 1,
-    thumbnail: 'https://images.unsplash.com/photo-1555617117-08fda1a2b3c6?q=80&w=200&auto=format&fit=crop'
-  }
-];
+import cartService from '../../services/cartService';
+import paymentService from '../../services/paymentService';
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const [items] = useState(sampleItems);
+  const [cartItems, setCartItems] = useState([]);
+  // We now show all cart items similar to cart page; no single selection
+  const [selectedItemId, setSelectedItemId] = useState(null); // retained if future selection needed
   const [User, setUser] = useState(null);
   const [userInfo, setUserInfo] = useState({});
-  const [shippingMethod, setShippingMethod] = useState({ id: 'fast', name: 'Express (Fast)', cost: 16.5 });
+  const [address, setAddress] = useState('');
+  const [shippingMethod] = useState({ id: 'fast', name: 'Express (Fast)', cost: 16.5 });
   const [note, setNote] = useState('');
-  const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
-  const total = subtotal + shippingMethod.cost;
-
-  const handlePlaceOrder = () => {
-    // Navigate to payment page with order data
-    navigate('/payment', {
-      state: {
-        orderData: {
-          items,
-          total,
-          user: User,
-          shippingMethod,
-          note
-        }
-      }
-    });
-  };
+  const [creating, setCreating] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    let isMounted = true;
-    const fetchUser = async () => {
-      const userData = await getCurrentUser();
-      if (isMounted) {
-        setUser(userData.user);
-        setUserInfo({
-            role: userData.userRole,
-            phoneNumber: userData.phoneNumber
-        });
+    let mounted = true;
+    const load = async () => {
+      try {
+        const userData = await getCurrentUser();
+        if (mounted && userData?.user) {
+          setUser(userData.user);
+          setUserInfo({ role: userData.userRole, phoneNumber: userData.phoneNumber });
+          setAddress(userData.user.Address || '');
+        }
+        const cartData = await cartService.getCartItems();
+        const itemsArr = Array.isArray(cartData) ? cartData : (cartData?.items || []);
+        if (mounted) {
+          setCartItems(itemsArr);
+          if (itemsArr.length) setSelectedItemId(itemsArr[0].id);
+        }
+      } catch (e) {
+        console.error('Checkout init error:', e);
+        if (mounted) setErrorMsg('Failed to load user or cart data');
       }
     };
-    fetchUser();
-    return () => {
-        isMounted = false;
-    };
-}, []);
+    load();
+    return () => { mounted = false; };
+  }, []);
 
-    console.log('CheckoutPage - User data:', User);
+  // Subtotal across all cart items
+  const subtotal = cartItems.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0);
+  const total = subtotal + shippingMethod.cost;
+
+  const handlePlaceOrder = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    if (!address) {
+      setErrorMsg('Address is required.');
+      return;
+    }
+    setCreating(true);
+    try {
+      if (!cartItems.length) {
+        setErrorMsg('Cart is empty.');
+        return;
+      }
+      // Filter items lacking required fields
+      const validItems = cartItems.filter(it => it.barcode && it.color && Number.isFinite(Number(it.price)) && Number.isFinite(Number(it.quantity)));
+      if (!validItems.length) {
+        setErrorMsg('No valid items to create orders (missing barcode/color/price/quantity).');
+        return;
+      }
+      const results = [];
+      for (const it of validItems) {
+        const payload = {
+          address,
+          status: 'Pending',
+          quantity: parseInt(it.quantity, 10),
+          price: Number(it.price),
+          barcode: it.barcode,
+          variationname: it.color
+        };
+        console.log('Creating order payload:', payload);
+        try {
+          const res = await paymentService.createOrder(payload);
+          // Collect order ID from response (adjust field name if backend returns different key)
+          const orderId = res?.order?.id || res?.id || null;
+          results.push({ id: it.id, ok: true, orderId, message: res?.message || 'Created' });
+        } catch (err) {
+          console.error(`Order item failed: ${it.id} (${it.color})`, err);
+          results.push({ id: it.id, ok: false, orderId: null, message: err.message || 'Failed' });
+        }
+      }
+      const failures = results.filter(r => !r.ok);
+      if (!failures.length) {
+        setSuccessMsg(`Created ${results.length} order${results.length>1?'s':''}. Redirecting to payment...`);
+        const orderIds = results.map(r => r.orderId).filter(Boolean);
+        setTimeout(() => navigate('/payment', { state: { orderIds, total } }), 1200);
+      } else if (failures.length === results.length) {
+        setErrorMsg('All orders failed. Check item data or permissions.');
+      } else {
+        const orderIds = results.filter(r => r.ok).map(r => r.orderId).filter(Boolean);
+        setErrorMsg(`Partial success: ${results.length - failures.length}/${results.length}. Failed IDs: ${failures.map(f=>f.id).join(', ')}. Redirecting with successful orders...`);
+        setTimeout(() => navigate('/payment', { state: { orderIds, total } }), 1500);
+      }
+    } catch (e) {
+      console.error('Create order failed:', e);
+      setErrorMsg(e.message || 'Failed to create order');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  console.log('CheckoutPage - User data:', User);
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -78,32 +123,54 @@ export default function CheckoutPage() {
           {/* Left / Main column */}
           <div className="lg:col-span-2 space-y-6">
 
+            {/* Feedback banners */}
+            {errorMsg && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 text-sm">
+                {errorMsg}
+              </div>
+            )}
+            {successMsg && (
+              <div className="bg-green-50 border border-green-200 text-green-700 rounded p-3 text-sm">
+                {successMsg}
+              </div>
+            )}
+
             {/* Shipping address card */}
             <section className="bg-white rounded-md shadow p-4 text-black">
-              <div className="flex items-start justify-between">
-                <h2 className="font-semibold">Shipping Address</h2>
-                <button className="text-sm text-blue-600">Change</button>
-              </div>
-              <div className="mt-3 text-sm text-black">
-                <p className="font-medium">Username: {User ? User.Username : ''}</p>
-                <p>Phone: {userInfo ? userInfo.phoneNumber : ''}</p>
-                <p className="mt-1">Address: {User ? User.Address : ''}</p>
+              <h2 className="font-semibold mb-3">Shipping Address</h2>
+              <div className="space-y-2 text-sm">
+                <div>Username: {User ? User.Username : ''}</div>
+                <div>Phone: {userInfo ? userInfo.phoneNumber : ''}</div>
+                <div>
+                  <label className="block mb-1 font-medium">Address</label>
+                  <input
+                    value={address}
+                    onChange={e => setAddress(e.target.value)}
+                    placeholder="Enter delivery address"
+                    className="w-full border rounded px-3 py-2 text-black text-sm"
+                  />
+                </div>
               </div>
             </section>
 
-            {/* Items list */}
+            {/* Items list (all cart items with images) */}
             <section className="bg-white rounded-md shadow p-4">
-              <h2 className="font-semibold mb-4">Products</h2>
+              <h2 className="font-semibold mb-4">Cart Items</h2>
               <div className="space-y-4">
-                {items.map(item => (
-                  <div key={item.id} className="flex gap-4 items-center">
-                    <img src={item.thumbnail} alt="thumb" className="w-20 h-20 rounded object-cover" />
+                {cartItems.length === 0 && (
+                  <div className="text-sm text-gray-500">Cart is empty.</div>
+                )}
+                {cartItems.map(item => (
+                  <div key={item.id} className="flex gap-4 items-center border rounded p-3">
+                    <img src={item.imageUrl} alt={item.name} className="w-16 h-16 rounded object-cover" />
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
-                        <div className="text-sm font-medium">{item.title}</div>
-                        <div className="text-sm font-semibold">{item.price.toFixed(3)}₫</div>
+                        <div className="text-sm font-medium">{item.name}</div>
+                        <div className="text-sm font-semibold">{(item.price || 0).toFixed(3)}₫</div>
                       </div>
-                      <div className="text-xs text-black mt-2">Qty: {item.qty}</div>
+                      <div className="text-xs text-black mt-1">Variation: {item.color || 'N/A'}</div>
+                      <div className="text-xs text-black">Qty: {item.quantity}</div>
+                      <div className="text-xs text-gray-500">Barcode: {item.barcode}</div>
                     </div>
                   </div>
                 ))}
@@ -161,16 +228,17 @@ export default function CheckoutPage() {
               </div>
               <button 
                 onClick={handlePlaceOrder}
-                className="mt-4 w-full bg-primary hover:bg-secondary text-white py-3 rounded-md font-semibold"
+                disabled={creating}
+                className={`mt-4 w-full bg-primary hover:bg-secondary text-white py-3 rounded-md font-semibold ${creating ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                Place Order
+                {creating ? 'Creating Order...' : 'Place Order'}
               </button>
             </div>
 
             <div className="bg-white rounded-md shadow p-4">
               <h4 className="font-semibold mb-2">Payment</h4>
               <div className="flex items-center justify-between text-sm text-black">
-                <div>Cash on Delivery</div>
+                <div>Card (charged after confirmation)</div>
                 <FiChevronDown />
               </div>
             </div>

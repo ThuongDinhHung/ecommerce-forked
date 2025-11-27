@@ -1,129 +1,130 @@
 // File: src/components/header/Header.jsx
 
-// --- FIX 1: Add all missing imports ---
-import React, { useState, useEffect } from 'react'; 
-import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react'; 
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-    FaSearch, FaChevronDown, FaBars, FaTimes,
-    FaUser, FaCog, FaSignOutAlt, FaShoppingCart 
+    FaSearch, FaBars, FaTimes,
+    FaUser, FaCog, FaSignOutAlt, FaShoppingCart, FaStar // Thêm FaStar
 } from 'react-icons/fa';
-import logoImage from '../../assets/logoBKBay.png'; // Assuming this path is correct
-import getCurrentUser from '../../services/userService'; // If needed for user data
+import logoImage from '../../assets/logoBKBay.png'; 
+import getCurrentUser from '../../services/userService'; 
 
-// default avatar (Gravatar 'mystery person' silhouette)
 const DEFAULT_AVATAR = 'https://www.gravatar.com/avatar/?d=mp&s=80';
 
-// Role-based menu configuration
+// [MỚI] Cấu hình Menu theo Role (Đã thêm Review)
 const ROLE_MENU_CONFIG = {
     buyer: [
         { key: 'profile', label: 'Profile', to: '/profile', icon: FaUser },
         { key: 'orders', label: 'My Orders', to: '/orders', icon: FaCog },
         { key: 'cart', label: 'My Cart', to: '/cart', icon: FaShoppingCart },
+        // Thêm mục Review cho Buyer
+        { key: 'write-review', label: 'Write Review', to: '/write-review', icon: FaStar },
+        { key: '/product/review', label: 'Review', to: '/product/review', icon: FaStar },
     ],
     shipper: [
         { key: 'profile', label: 'Profile', to: '/profile', icon: FaUser },
         { key: 'shipper-details', label: 'Shipper Details', to: '/shipper-details', icon: FaCog },
         { key: 'shipper-orders', label: 'Orders', to: '/shipper/orders', icon: FaShoppingCart },
     ],
-    // Extend here: seller, admin, etc.
+    seller: [
+        { key: 'dashboard', label: 'Dashboard', to: '/seller/seller-dashboard', icon: FaCog },
+        { key: 'products', label: 'My Products', to: '/seller/products', icon: FaShoppingCart },
+    ],
+    admin: [
+        { key: 'dashboard', label: 'Admin Dashboard', to: '/admin', icon: FaCog },
+    ]
 };
 
-export default function Header({showNav=false}) {
+export default function Header({ showNav = true }) { // Default showNav = true để hiện thanh search
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
   
     const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR);
     const [currentUser, setCurrentUser] = useState(null);
-    const [userRole, setUserRole] = useState('');
+    const [userRole, setUserRole] = useState(''); // Mặc định rỗng
     
-    // --- FIX 3: Define missing state ---
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
 
-    // --- FIX 4: Define missing link class function for mobile ---
-    // This uses Tailwind classes. 'bg-secondary' must be defined in your index.css
-    const mobileLinkClassName = ({ isActive }) =>
-        `block text-base font-bold uppercase tracking-wider hover:bg-secondary transition-colors px-3 py-2 rounded-md ${
-            isActive ? "bg-secondary text-white" : "text-gray-900" // Adjusted for white mobile bg
-        }`;
-    
+    const menuRef = useRef(null);
+
+    // Đóng menu khi click ra ngoài
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setShowUserMenu(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     const handleLogout = async () => {
-        // Add your logout logic here
         try {
-            await fetch('/api/users/logout', {
-                method: 'POST',
-                credentials: 'include',
-            });
+            await fetch('/api/users/logout', { method: 'POST', credentials: 'include' });
             setCurrentUser(null);
-            // Optionally redirect to login page
+            setUserRole('');
             navigate('/login');
         } catch (error) {
             console.error('Logout failed', error);
         }
     }
 
-    // Fetch current user once on mount
+    // Fetch user logic (Giữ nguyên)
     useEffect(() => {
         let mounted = true;
         const fetchUser = async () => {
             try {
                 const userData = await getCurrentUser();
-                // console.log('Current user data:', userData);
                 if (!mounted) return;
-                if (userData && (userData.user || userData.data || userData)) {
-                    const parsed = userData.user || userData.data || userData;
-                    setCurrentUser(parsed);
-                    const r = userData.userRole
-                    setUserRole(r);
-                    // If your API returns an avatar URL on the user object, prefer it
-                    if (parsed.avatar) {
-                        setUserAvatar(parsed.avatar);
+                
+                // Logic parse user data tùy theo API trả về
+                // userData có thể là { success: true, user: {...}, userRole: '...' } 
+                // hoặc trực tiếp object user. Cần check kỹ.
+                const userObj = userData.user || userData.data || userData; 
+                
+                if (userObj && userObj.Username) { // Check cơ bản xem có phải user không
+                    setCurrentUser(userObj);
+                    
+                    // Lấy role từ API hoặc fallback về 'buyer'
+                    const role = userData.userRole || userObj.role || 'buyer'; 
+                    setUserRole(role.toLowerCase());
+
+                    if (userObj.avatar) {
+                        setUserAvatar(userObj.avatar);
                     } else {
-                        // Fallback to a random avatar service asynchronously; if that fails, use DEFAULT_AVATAR
-                        fetch('https://randomuser.me/api/?gender=female&inc=picture')
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.results && data.results.length > 0) {
-                                    if (mounted) setUserAvatar(data.results[0].picture.thumbnail);
-                                } else if (mounted) {
-                                    setUserAvatar(DEFAULT_AVATAR);
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error fetching random user avatar:', error);
-                                if (mounted) setUserAvatar(DEFAULT_AVATAR);
-                            });
+                        // Fallback avatar
+                        setUserAvatar(`https://ui-avatars.com/api/?name=${userObj.Username}&background=random`);
                     }
                 } else {
-                    // no logged-in user
                     setCurrentUser(null);
+                    setUserRole('');
                     setUserAvatar(DEFAULT_AVATAR);
                 }
             } catch (err) {
                 console.error('Error resolving current user:', err);
-                if (mounted) setCurrentUser(null);
+                if (mounted) {
+                    setCurrentUser(null);
+                    setUserRole('');
+                }
             }
         };
         fetchUser();
         return () => { mounted = false; };
-    }, []); // Empty dependency array means this runs once on mount
-    console.log('Header: Current user:', currentUser);
-    console.log('Header: User role:', userRole);
-    console.log('Header: Available configs:', Object.keys(ROLE_MENU_CONFIG));
+    }, []); 
 
-    const menuRole = ROLE_MENU_CONFIG[userRole] ? userRole : '';
-    console.log('Header: Menu role selected:', menuRole);
+    // Chọn menu config dựa trên role. Nếu không có role (Guest) thì dùng mảng rỗng hoặc menu mặc định
+    const menuItems = ROLE_MENU_CONFIG[userRole] || [];
 
     return (
-        // --- FIX 5: Add 'relative' to header for absolute menus ---
         <header className="bg-white shadow-sm py-4 relative z-20"> 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
                 
-                {/* Logo and App Name */}
+                {/* Logo */}
                 <div className="flex items-center">
                     <Link to="/" className="flex items-center space-x-2 text-xl font-bold text-gray-900">
-                        <img src={logoImage} alt="BK BAY Logo" className="h-20 w-20" /> {/* Use your logo */}
+                        <img src={logoImage} alt="BK BAY Logo" className="h-20 w-20 object-contain" /> 
                         <span>BK BAY</span>
                     </Link>
                 </div>
@@ -150,128 +151,143 @@ export default function Header({showNav=false}) {
                 )}
 
                 {/* User Profile & Menu (Desktop) */}
-                <div className="hidden md:flex items-center space-x-3 relative">
+                <div className="hidden md:flex items-center space-x-3 relative" ref={menuRef}>
                     <span className="text-gray-700 font-medium">{currentUser ? currentUser.Username : 'Guest'}</span>
-                    <img
-                        className="h-9 w-9 rounded-full cursor-pointer border-2 border-gray-300"
-                        src={userAvatar}
-                        alt="User avatar"
-                        onClick={() => setShowUserMenu(!showUserMenu)} // Add click handler
-                    />
                     
-                    {/* --- USER MENU DROPDOWN (DESKTOP) --- */}
-                                        {showUserMenu && (
-                        <div className="absolute top-full right-0 mt-2 w-52 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-50">
+                    <div 
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowUserMenu(!showUserMenu);
+                        }}
+                    >
+                        <img
+                            className="h-9 w-9 rounded-full border-2 border-gray-300 hover:border-blue-500 transition"
+                            src={userAvatar}
+                            alt="User avatar"
+                        />
+                    </div>
+                    
+                    {/* Dropdown Menu */}
+                    {showUserMenu && (
+                        <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-50 animate-fade-in-up">
                             <ul className="py-1 text-sm text-gray-700">
-                                <li className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
-                                    Welcome, {currentUser ? currentUser.Username : 'Guest'}
+                                <li className="px-4 py-3 text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
+                                    Signed in as <br/> <span className="font-bold text-gray-800">{currentUser ? currentUser.Username : 'Guest'}</span>
                                 </li>
-                                {/* Role-specific menu (driven by ROLE_MENU_CONFIG) */}
-                                {(ROLE_MENU_CONFIG[menuRole] || []).map(item => {
-                                    const Icon = item.icon || FaUser;
+                                
+                                {/* Dynamic Menu Items based on Role */}
+                                {menuItems.map(item => {
+                                    const Icon = item.icon;
                                     return (
                                         <li key={item.key}>
                                             <Link
                                                 to={item.to}
                                                 onClick={() => setShowUserMenu(false)}
-                                                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                                                className="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 w-full text-left transition-colors"
                                             >
-                                                <Icon className="h-5 w-5" /> {item.label}
+                                                <Icon className="text-gray-400" /> {item.label}
                                             </Link>
                                         </li>
                                     );
                                 })}
-                                <li className="border-t border-gray-200 mt-1 pt-1">
-                                    <button
-                                        onClick={() => {
-                                            // Add your logout logic here
-                                            handleLogout();
-                                            setShowUserMenu(false);
-                                        }}
-                                        className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 w-full text-left text-red-600 hover:text-red-700"
-                                    >
-                                        <FaSignOutAlt className="h-5 w-5" /> Log Out
-                                    </button>
-                                </li>
+
+                                {/* Nếu là Guest (chưa đăng nhập) thì hiện nút Login */}
+                                {!currentUser && (
+                                    <li>
+                                        <Link
+                                            to="/login"
+                                            onClick={() => setShowUserMenu(false)}
+                                            className="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 w-full text-left transition-colors font-bold text-blue-600"
+                                        >
+                                            <FaUser /> Log In
+                                        </Link>
+                                    </li>
+                                )}
+
+                                {/* Logout Button (Chỉ hiện khi đã đăng nhập) */}
+                                {currentUser && (
+                                    <li className="border-t border-gray-200 mt-1 pt-1">
+                                        <button
+                                            onClick={() => {
+                                                handleLogout();
+                                                setShowUserMenu(false);
+                                            }}
+                                            className="flex items-center gap-3 px-4 py-2 hover:bg-red-50 w-full text-left text-red-600 hover:text-red-700 transition-colors"
+                                        >
+                                            <FaSignOutAlt /> Log Out
+                                        </button>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     )}
                 </div>
 
-                {/* --- FIX 6: Add Mobile Burger Icon (it was missing) --- */}
+                {/* Mobile Burger Icon */}
                 <div className="md:hidden flex items-center">
-                     <button 
+                      <button 
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="text-gray-900 p-2 rounded-md" // Text color changed for white bg
-                        aria-label="Toggle menu"
-                     >
+                        className="text-gray-900 p-2 rounded-md"
+                      >
                         {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
-                     </button>
+                      </button>
                 </div>
 
-            </div> {/* End of max-w-7xl div */}
+            </div> 
 
-            {/* --- 5. Mobile Menu (Dropdown) --- */}
-            {/* This code was copied from the *other* file, now it's fixed */}
-            <div 
-                className={`
-                    md:hidden absolute top-full left-0 w-full bg-white shadow-lg px-4 pt-2 pb-4 space-y-4
-                    transition-all duration-300 ease-in-out z-10
-                    ${isMobileMenuOpen 
-                        ? 'opacity-100 translate-y-0 pointer-events-auto' 
-                        : 'opacity-0 -translate-y-60 pointer-events-none'
-                    }
-                `}
-            >
-                {/* Mobile Search Bar */}
+            {/* Mobile Menu Dropdown */}
+            <div className={`md:hidden absolute top-full left-0 w-full bg-white shadow-lg px-4 pt-2 pb-4 space-y-4 transition-all duration-300 ease-in-out z-10 ${isMobileMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-60 pointer-events-none'}`}>
+                {/* Mobile Search */}
                 <div className="w-full">
                     <div className="relative">
-                        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <FaSearch className="absolute left-3 top-1/2 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Search products..."
+                            placeholder="Search..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setSearchParams({ search: searchInput });
-                                    setIsMobileMenuOpen(false);
-                                }
-                            }}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
                         />
                     </div>
                 </div>
                 
-                {/* Divider */}
                 <div className="border-t border-gray-200 my-4"></div>
 
-                {/* Mobile User Controls - Role-based */}
+                {/* Mobile Dynamic Menu */}
                 <div className="flex flex-col space-y-2">
-                    {(ROLE_MENU_CONFIG[menuRole] || []).map(item => {
-                        const Icon = item.icon || FaUser;
+                    {menuItems.map(item => {
+                        const Icon = item.icon;
                         return (
                             <Link
                                 key={item.key}
                                 to={item.to}
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 w-full text-left"
                             >
-                                <Icon className="h-5 w-5" /> {item.label}
+                                <Icon className="h-5 w-5 text-gray-500" /> {item.label}
                             </Link>
                         );
                     })}
-                    <button
-                        onClick={() => {
-                            handleLogout();
-                            setIsMobileMenuOpen(false);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 w-full text-left text-red-600 hover:text-red-700"
-                    >
-                        <FaSignOutAlt className="h-5 w-5" /> Log Out
-                    </button>
+
+                    {currentUser ? (
+                        <button
+                            onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-red-50 w-full text-left text-red-600"
+                        >
+                            <FaSignOutAlt className="h-5 w-5" /> Log Out
+                        </button>
+                    ) : (
+                        <Link
+                            to="/login"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 w-full text-left text-blue-600 font-bold"
+                        >
+                            <FaUser className="h-5 w-5" /> Log In
+                        </Link>
+                    )}
                 </div>
-            </div> {/* End of Mobile Menu */}
+            </div>
         </header>
     );
 }

@@ -3,43 +3,95 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
 import { FiCheck } from 'react-icons/fi';
+import paymentService from '../../services/paymentService';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { orderData } = location.state || {};
+  const { orderIds, total } = location.state || {};
+
+  console.log('PaymentPage: orderIds & total from state:', orderIds, total);
   
-  const [paymentMethod, setPaymentMethod] = useState('qr');
+  const [paymentMethod, setPaymentMethod] = useState('card');
   const [showSuccess, setShowSuccess] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [transactionId, setTransactionId] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [processing, setProcessing] = useState(false);
 
-  // If no order data, redirect back
+  // If state is lost (no orderIds), send user back to cart immediately
   useEffect(() => {
-    if (!orderData) {
-      navigate('/checkout');
+    if (!orderIds || !orderIds.length) {
+      navigate('/cart');
+      return;
     }
-  }, [orderData, navigate]);
+    // Create transaction on mount
+    const createTransaction = async () => {
+      try {
+        const res = await fetch('/api/transaction', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIds, total })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || 'Transaction creation failed');
+        setTransactionId(data?.transactionId || data?.id);
+        console.log('Transaction created:', data);
+      } catch (err) {
+        console.error('Transaction error:', err);
+        setErrorMsg(err.message || 'Failed to create transaction');
+      }
+    };
+    createTransaction();
+  }, [orderIds, total, navigate]);
 
-  const handlePayment = () => {
-    // Simulate payment processing
+  const handlePayment = async () => {
+    if (!transactionId) {
+      setErrorMsg('No transaction ID. Cannot proceed with payment.');
+      return;
+    }
+    setProcessing(true);
     setShowSuccess(true);
-    
-    // Start countdown
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          navigate('/'); // Redirect to home after countdown
-          return 0;
-        }
-        return prev - 1;
+    try {
+      const res = await fetch('/api/pay', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId })
       });
-    }, 1000);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Payment failed');
+      setSuccessMsg(data?.message || 'Payment successful');
+      setErrorMsg('');
+      console.log('Payment successful:', data);
+      // Success: redirect to buyer orders after countdown
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            navigate('/buyer/orders');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error('Payment error:', e);
+      setErrorMsg(e.message || 'Payment failed');
+      setSuccessMsg('');
+      setShowSuccess(false);
+    } finally {
+      setProcessing(false);
+    }
   };
 
-  if (!orderData) return null;
-
-  const { total, items, user } = orderData;
+  if (!orderIds || !orderIds.length) return null;
+  const formatAmount = (val) => {
+    const num = Number(val);
+    return Number.isFinite(num) ? num.toFixed(3) : '0.000';
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -47,6 +99,23 @@ export default function PaymentPage() {
 
       <main className="max-w-4xl mx-auto p-6 text-black">
         <h1 className="text-2xl font-bold mb-6">Payment</h1>
+
+        {/* Transaction & Payment feedback banners */}
+        {errorMsg && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
+            {errorMsg}
+          </div>
+        )}
+        {successMsg && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg p-3">
+            {successMsg}
+          </div>
+        )}
+        {transactionId && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg p-3 text-sm">
+            Transaction ID: {transactionId}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Payment Methods */}
@@ -113,8 +182,8 @@ export default function PaymentPage() {
               <h2 className="font-semibold mb-4">Order Summary</h2>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Items ({items?.length || 0})</span>
-                  <span className="font-medium">{(total - 16.5).toFixed(3)}₫</span>
+                  <span className="text-gray-600">Orders ({orderIds?.length || 0})</span>
+                  <span className="font-medium">{formatAmount(Number(total) - 16.5)}₫</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
@@ -122,7 +191,7 @@ export default function PaymentPage() {
                 </div>
                 <div className="flex justify-between border-t pt-2 mt-2">
                   <span className="font-semibold">Total</span>
-                  <span className="font-bold text-lg text-red-600">{total.toFixed(3)}₫</span>
+                  <span className="font-bold text-lg text-red-600">{formatAmount(total)}₫</span>
                 </div>
               </div>
             </section>
@@ -131,42 +200,7 @@ export default function PaymentPage() {
           {/* Right: QR Code / Payment Details */}
           <div>
             <section className="bg-white rounded-md shadow p-6">
-              {paymentMethod === 'qr' && (
-                <div className="text-center">
-                  <h3 className="font-semibold mb-4">Scan QR Code to Pay</h3>
-                  <div className="bg-gray-100 p-4 rounded-lg mb-4 inline-block">
-                    {/* QR Code placeholder - in production, generate actual QR code */}
-                    <div className="w-64 h-64 bg-white border-4 border-gray-300 flex items-center justify-center">
-                      <svg className="w-56 h-56" viewBox="0 0 100 100" fill="black">
-                        {/* Simple QR code pattern */}
-                        <rect x="0" y="0" width="20" height="20" />
-                        <rect x="80" y="0" width="20" height="20" />
-                        <rect x="0" y="80" width="20" height="20" />
-                        <rect x="40" y="40" width="20" height="20" />
-                        <rect x="10" y="30" width="10" height="10" />
-                        <rect x="70" y="30" width="10" height="10" />
-                        <rect x="30" y="70" width="10" height="10" />
-                        <rect x="60" y="10" width="10" height="10" />
-                        <rect x="50" y="80" width="10" height="10" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">Amount: <span className="font-bold text-black">{total.toFixed(3)}₫</span></p>
-                  <p className="text-xs text-gray-500 mb-4">Scan this code with your banking app</p>
-                </div>
-              )}
-
-              {paymentMethod === 'cod' && (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-semibold mb-2">Cash on Delivery</h3>
-                  <p className="text-sm text-gray-600">You will pay {total.toFixed(3)}₫ when you receive your order</p>
-                </div>
-              )}
+              {/* Only Card payment UI */}
 
               {paymentMethod === 'card' && (
                 <div className="space-y-4">
@@ -194,9 +228,12 @@ export default function PaymentPage() {
 
               <button
                 onClick={handlePayment}
-                className="w-full mt-6 bg-primary hover:bg-secondary text-white py-3 rounded-md font-semibold"
+                disabled={!transactionId || processing}
+                className={`w-full mt-6 bg-primary hover:bg-secondary text-white py-3 rounded-md font-semibold ${
+                  !transactionId || processing ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                Confirm Payment
+                {processing ? 'Processing...' : `Pay ${formatAmount(total)}₫`}
               </button>
             </section>
           </div>
@@ -212,8 +249,12 @@ export default function PaymentPage() {
                 <FiCheck className="w-8 h-8 text-green-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
-              <p className="text-gray-600 mb-2">Your order has been placed successfully.</p>
-              <p className="text-sm text-gray-500 mb-4">Order Total: <span className="font-semibold text-red-600">{total.toFixed(3)}₫</span></p>
+              {errorMsg ? (
+                <p className="text-red-600 mb-2">Error: {errorMsg}</p>
+              ) : (
+                <p className="text-gray-600 mb-2">Your payment has been processed successfully.</p>
+              )}
+              <p className="text-sm text-gray-500 mb-4">Order Total: <span className="font-semibold text-red-600">{formatAmount(total)}₫</span></p>
               <p className="text-sm text-gray-400">Redirecting in {countdown} seconds...</p>
             </div>
           </div>

@@ -10,14 +10,14 @@ import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
 
 const ProductReviews = () => {
-  // Danh sách các loại reaction
+  // List of reaction types (Translated to English)
   const REACTION_TYPES = [
-    { id: 'like', icon: '👍', label: 'Thích', color: 'text-blue-600' },
-    { id: 'love', icon: '❤️', label: 'Yêu thích', color: 'text-red-500' },
+    { id: 'like', icon: '👍', label: 'Like', color: 'text-blue-600' },
+    { id: 'love', icon: '❤️', label: 'Love', color: 'text-red-500' },
     { id: 'haha', icon: '😆', label: 'Haha', color: 'text-yellow-500' },
     { id: 'wow', icon: '😮', label: 'Wow', color: 'text-yellow-500' },
-    { id: 'sad', icon: '😢', label: 'Buồn', color: 'text-yellow-500' },
-    { id: 'angry', icon: '😡', label: 'Phẫn nộ', color: 'text-orange-600' }
+    { id: 'sad', icon: '😢', label: 'Sad', color: 'text-yellow-500' },
+    { id: 'angry', icon: '😡', label: 'Angry', color: 'text-orange-600' }
   ];
 
   const { productId: pid } = useParams();
@@ -28,18 +28,17 @@ const ProductReviews = () => {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
 
-  // Load data ban đầu
+  // Load initial data
   useEffect(() => {
     const loadData = async () => {
-      // 1. Load danh sách sản phẩm cho Dropdown (Dùng ReviewService)
+      // 1. Load product list for Dropdown (Use ReviewService)
       if (products.length === 0) {
         try {
-          // SỬA Ở ĐÂY: Gọi reviewService thay vì productService
           const allProducts = await reviewService.getAllProducts();
           
           if (allProducts && allProducts.length > 0) {
             setProducts(allProducts);
-            // Nếu chưa có pid trên URL, tự động navigate đến sản phẩm đầu tiên
+            // If no pid in URL, auto-navigate to the first product
             if (!pid) {
                 navigate(`/product/${allProducts[0].product_id}/reviews`);
                 return; 
@@ -50,18 +49,19 @@ const ProductReviews = () => {
         }
       }
 
-      // 2. Load Review nếu đã có pid
+      // 2. Load Reviews if pid exists
       if (pid) {
         setLoading(true);
         setFetchError('');
         try {
           const list = await reviewService.getReviews(pid);
           
-          // Vì service đã normalize dữ liệu rồi, ta có thể set trực tiếp
-          // Nhưng để chắc chắn avatar luôn hiển thị, ta map lại 1 lần nữa cho UI
+          // Map API data to UI format
           const formattedList = list.map(item => ({
               ...item,
+              // Ensure avatar fallback
               avatar: item.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.username || 'User')}`,
+              // Ensure replies is an array
               replies: Array.isArray(item.replies) ? item.replies.map(r => ({
                   ...r,
                   avatar: r.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.username || 'User')}`
@@ -71,7 +71,7 @@ const ProductReviews = () => {
           setReviews(formattedList);
         } catch (err) {
           console.error('getReviews error', err);
-          setFetchError(err.message || 'Không thể tải đánh giá');
+          setFetchError(err.message || 'Failed to load reviews');
           setReviews([]);
         } finally {
           setLoading(false);
@@ -82,14 +82,14 @@ const ProductReviews = () => {
     };
 
     loadData();
-  }, [pid, navigate]); // Bỏ products.length để tránh loop
+  }, [pid, navigate]); 
 
 
-  // Helper function: Cập nhật state review (Optimistic Update)
+  // Helper function: Update review state (Optimistic Update)
   const updateReviewState = (reviewId, reactionType, isReply = false, parentId = null) => {
       setReviews(prevReviews => {
           return prevReviews.map(review => {
-              // Update Review Cha
+              // Update Parent Review
               if (!isReply && review.id === reviewId) {
                   const isToggleOff = review.myReaction === reactionType;
                   return {
@@ -98,7 +98,7 @@ const ProductReviews = () => {
                       likes: isToggleOff ? (review.likes - 1) : (review.myReaction ? review.likes : review.likes + 1)
                   };
               }
-              // Update Reply Con
+              // Update Child Reply
               if (isReply && review.id === parentId && review.replies) {
                   return {
                       ...review,
@@ -122,7 +122,7 @@ const ProductReviews = () => {
 
   // Handle Reaction Selection
   const handleReact = async (targetId, reactionType, isReply = false, parentId = null) => {
-    // 1. Optimistic Update
+    // 1. Optimistic UI Update
     updateReviewState(targetId, reactionType, isReply, parentId);
 
     // 2. Call API
@@ -131,8 +131,8 @@ const ProductReviews = () => {
         await reviewService.upsertReaction(targetId, reactionType);
       } catch (err) {
         console.error('upsertReaction error', err);
-        alert("Có lỗi xảy ra, vui lòng thử lại.");
-        // Revert nếu lỗi (gọi lại hàm update y hệt để đảo ngược)
+        alert("An error occurred, please try again.");
+        // Revert if error
         updateReviewState(targetId, reactionType, isReply, parentId);
       }
     }
@@ -153,7 +153,7 @@ const ProductReviews = () => {
     );
   };
 
-  // Component nút Reaction
+  // Reaction Button Component
   const ReactionButton = ({ item, onReact, isReply = false, parentId = null }) => {
     const currentReaction = REACTION_TYPES.find(r => r.id === item.myReaction);
 
@@ -185,7 +185,7 @@ const ProductReviews = () => {
           ) : (
              <ThumbsUp size={14} />
           )}
-          <span>{item.likes > 0 ? item.likes : 'Hữu ích?'}</span>
+          <span>{item.likes > 0 ? item.likes : 'Helpful?'}</span>
           {currentReaction && <span className="text-xs font-normal text-gray-500">({currentReaction.label})</span>}
         </button>
       </div>
@@ -202,27 +202,27 @@ const ProductReviews = () => {
           {/* Header Section */}
           <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-baseline gap-4">
-               <h1 className="text-xl font-bold text-gray-800 uppercase">Đánh giá sản phẩm</h1>
+               <h1 className="text-xl font-bold text-gray-800 uppercase">PRODUCT REVIEWS</h1>
                <div className="flex items-center gap-2">
                   <span className="text-5xl font-bold text-gray-800">
                     {reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : '0.0'}
                   </span>
                   <div className="flex flex-col">
                      {renderStars(reviews.length > 0 ? Math.round(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) : 0)}
-                     <span className="text-sm text-gray-400">trên 5</span>
+                     <span className="text-sm text-gray-400">out of 5</span>
                   </div>
                </div>
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Chọn Mã Sản Phẩm</span>
+              <span className="text-sm text-gray-500">Select Product</span>
               <div className="relative">
                 <select
                   value={pid || ''}
                   onChange={(e) => navigate(`/product/${e.target.value}/reviews`)}
                   className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-1.5 pl-3 pr-8 rounded text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  <option value="" disabled>Chọn một sản phẩm</option>
+                  <option value="" disabled>Select a product</option>
                   {products.map(product => (
                     <option key={product.product_id} value={product.product_id}>
                       {product.name} ({product.product_id})
@@ -237,22 +237,22 @@ const ProductReviews = () => {
           {/* Filter Section */}
           <div className="px-6 pb-6 pt-2 border-b border-gray-100">
              <div className="flex flex-wrap gap-2">
-                 <button className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">Tất Cả ({reviews.length})</button>
-                 <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">5 Sao</button>
-                 <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">Có Bình Luận</button>
+                 <button className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">All ({reviews.length})</button>
+                 {/* <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">5 Stars</button>
+                 <button className="px-4 py-1.5 border border-gray-200 bg-white text-gray-600 rounded text-sm hover:border-blue-500">With Comments</button> */}
              </div>
           </div>
 
        {/* Review List */}
        <div>
         {loading ? (
-          <div className="p-10 text-center text-gray-500">Đang tải đánh giá...</div>
+          <div className="p-10 text-center text-gray-500">Loading reviews...</div>
         ) : fetchError ? (
           <div className="p-10 text-center text-red-500">{fetchError}</div>
         ) : !pid ? (
-          <div className="p-10 text-center text-gray-500">Vui lòng chọn sản phẩm để xem đánh giá.</div>
+          <div className="p-10 text-center text-gray-500">Please select a product to view reviews.</div>
         ) : reviews.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">Chưa có đánh giá nào cho sản phẩm này.</div>
+          <div className="p-10 text-center text-gray-500">No reviews yet for this product.</div>
         ) : (
           reviews.map((review) => (
            <div key={review.id} className="p-6 border-b border-gray-100 last:border-none">
@@ -272,7 +272,7 @@ const ProductReviews = () => {
                   <div>
                     <div className="text-sm font-semibold text-gray-800">{review.username}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                        {review.date ? new Date(review.date).toLocaleString('vi-VN') : ''} 
+                        {review.date ? new Date(review.date).toLocaleString('en-US') : ''} 
                         {review.variant && ` | ${review.variant}`}
                     </div>
                   </div>
@@ -289,13 +289,14 @@ const ProductReviews = () => {
                   <ReactionButton item={review} onReact={handleReact} />
                   <button className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-blue-600">
                     <MessageSquare size={14} />
-                    <span>Phản hồi</span>
+                    <span>Reply</span>
                   </button>
                 </div>
 
                 {/* REPLIES SECTION */}
                 {review.replies && review.replies.length > 0 && (
                   <div className="mt-4 bg-gray-50 rounded-md p-4 space-y-4 relative">
+                    {/* Arrow indicator */}
                     <div className="absolute -top-2 left-4 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-8 border-b-gray-50"></div>
                              
                     {review.replies.map(reply => (
@@ -309,11 +310,11 @@ const ProductReviews = () => {
                         <div className="grow">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-gray-800">{reply.username}</span>
-                            <span className="text-xs text-gray-400">{reply.date ? new Date(reply.date).toLocaleString('vi-VN') : ''}</span>
+                            <span className="text-xs text-gray-400">{reply.date ? new Date(reply.date).toLocaleString('en-US') : ''}</span>
                           </div>
                           <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{reply.content}</p>
                           
-                          {/* Actions cho Reply */}
+                          {/* Reply Actions */}
                           <div className="mt-2 flex items-center gap-4">
                             <ReactionButton 
                                 item={reply} 
@@ -321,7 +322,7 @@ const ProductReviews = () => {
                                 isReply={true} 
                                 parentId={review.id} 
                             />
-                            <button className="text-xs font-medium text-gray-500 hover:text-blue-600">Phản hồi</button>
+                            <button className="text-xs font-medium text-gray-500 hover:text-blue-600">Reply</button>
                           </div>
                         </div>
                       </div>

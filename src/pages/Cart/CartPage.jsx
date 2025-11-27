@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { FiSearch, FiPlus, FiMinus, FiTrash2, FiMoreVertical } from 'react-icons/fi';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FiSearch } from 'react-icons/fi';
 
 import cartService from '../../services/cartService';
-
 import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
 import OrderSummary from "../../components/order/OrderSummary";
 import CartItem from "../../components/cart/CartItem";
 
-
 export default function ShoppingCart() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  // --- Load Cart Items ---
+  const [searchQuery, setSearchQuery] = useState('');
 
+  // --- Load Cart Items ---
   useEffect(() => {
     setLoading(true);
     const loadCartItems = async () => {
@@ -28,22 +27,63 @@ export default function ShoppingCart() {
     };
     loadCartItems();
   }, []);
-  
-  // --- State Handlers ---
-  const handleUpdateQuantity = (id, delta) => {
-    setItems(currentItems =>
-      currentItems.map(item =>
-        item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
-      )
+
+  // --- Search Logic ---
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) return items;
+    const lowerQuery = searchQuery.toLowerCase();
+    return items.filter(item => 
+      (item.name && item.name.toLowerCase().includes(lowerQuery)) ||
+      (item.color && item.color.toLowerCase().includes(lowerQuery)) ||
+      (item.barcode && item.barcode.toLowerCase().includes(lowerQuery))
     );
+  }, [items, searchQuery]);
+
+  // --- Handlers ---
+
+  const handleRemoveItem = async (id) => {
+    const itemToRemove = items.find(item => item.id === id);
+    if (!itemToRemove) return;
+
+    // Optimistic UI Update
+    setItems(currentItems => currentItems.filter(item => item.id !== id));
+
+    try {
+      await cartService.removeItem(itemToRemove.barcode, itemToRemove.color);
+    } catch (error) {
+      console.error('Failed to remove item from DB', error);
+      // Optional: Revert state if API fails
+    }
   };
 
-  const handleRemoveItem = (id) => {
-    setItems(currentItems => currentItems.filter(item => item.id !== id));
+  // --- UPDATED: Immediate Update (No Debounce) ---
+  const handleUpdateQuantity = async (id, delta) => {
+    const itemToUpdate = items.find(i => i.id === id);
+    if (!itemToUpdate) return;
+
+    // 1. Calculate the new quantity
+    const newQuantity = Math.max(1, itemToUpdate.quantity + delta);
+
+    // 2. Optimistic UI Update (Update screen immediately)
+    setItems(currentItems =>
+      currentItems.map(item =>
+        item.id === id ? { ...item, quantity: newQuantity } : item
+      )
+    );
+
+    // 3. Call API Immediately
+    // This assumes you set up the 'updateItem' (PUT) service in the previous step
+    try {
+        await cartService.updateItem(itemToUpdate.barcode, itemToUpdate.color, newQuantity);
+        // console.log('Synced:', newQuantity);
+    } catch (error) {
+        console.error('Failed to update quantity in DB', error);
+        // Optional: Revert UI to previous quantity if specific error handling is needed
+    }
   };
 
   // --- Calculations ---
-  const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const subtotal = items.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0);
 
   return (
     <div>
@@ -54,18 +94,12 @@ export default function ShoppingCart() {
 
             {loading ? (
               <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-                <div className="animate-pulse space-y-4">
-                  <div className="h-10 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-24 bg-gray-200 rounded"></div>
-                  <div className="h-24 bg-gray-200 rounded"></div>
-                  <div className="h-24 bg-gray-200 rounded"></div>
-                </div>
                 <p className="mt-4 text-gray-500">Loading your cart…</p>
               </div>
             ) : (
               <div className="flex flex-col lg:flex-row lg:gap-8">
-                {/* Left Column: Cart Items */}
                 <div className="grow lg:w-2/3">
+                  
                   {/* Search Bar */}
                   <div className="relative mb-6">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -73,25 +107,32 @@ export default function ShoppingCart() {
                     </span>
                     <input
                       type="text"
-                      placeholder="Search cart items by name, color, or size..."
+                      placeholder="Search cart items..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full bg-white border border-gray-700 text-gray-700 rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-secondary"
                     />
                   </div>
 
                   {/* Items List */}
                   <div className="space-y-4">
-                    {items.map(item => (
-                      <CartItem
-                        key={item.id}
-                        item={item}
-                        onUpdateQuantity={handleUpdateQuantity}
-                        onRemove={handleRemoveItem}
-                      />
-                    ))}
+                    {filteredItems.length === 0 ? (
+                        <div className="text-center py-10 text-gray-500">
+                            {searchQuery ? "No items match your search." : "Your cart is empty."}
+                        </div>
+                    ) : (
+                        filteredItems.map(item => (
+                        <CartItem
+                            key={item.id}
+                            item={item}
+                            onUpdateQuantity={handleUpdateQuantity}
+                            onRemove={handleRemoveItem}
+                        />
+                        ))
+                    )}
                   </div>
                 </div>
 
-                {/* Right Column: Order Summary */}
                 <div className="lg:w-1/3 mt-8 lg:mt-0">
                   <OrderSummary subtotal={subtotal} />
                 </div>

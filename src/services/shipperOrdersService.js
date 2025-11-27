@@ -1,10 +1,10 @@
-// Service – now only fetches all orders and client-side filters by status.
-// Backend only exposes GET /api/orders (no query params for status).
+// Service – use GET /api/orders/details with status filter (ignore minItems per requirement)
 
 const json = async (res) => { try { return await res.json(); } catch { return {}; } };
 
-export async function getAllOrders() {
-  const res = await fetch('/api/orders', {
+export async function getOrdersByStatus(status) {
+  const url = status ? `/api/orders/details?status=${encodeURIComponent(status)}` : '/api/orders/details';
+  const res = await fetch(url, {
     method: 'GET',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -12,6 +12,12 @@ export async function getAllOrders() {
   const data = await json(res);
   if (!res.ok) throw new Error(data?.message || 'Failed to load orders');
   return Array.isArray(data) ? data : (data.data || data.orders || []);
+}
+
+export async function getOrdersByStatuses(statuses = []) {
+  if (!Array.isArray(statuses) || statuses.length === 0) return [];
+  const results = await Promise.all(statuses.map(s => getOrdersByStatus(s).catch(() => [])));
+  return results.flat();
 }
 
 export async function claimOrder(orderId) {
@@ -38,7 +44,8 @@ export async function updateOrderStatus(orderId, status) {
 }
 
 export default {
-  getAllOrders,
+  getOrdersByStatus,
+  getOrdersByStatuses,
   claimOrder,
   updateOrderStatus,
 };

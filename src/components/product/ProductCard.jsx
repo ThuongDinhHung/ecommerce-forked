@@ -1,61 +1,110 @@
-// import StarRating from "../review/StarRating"
-import { useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
-const ProductCard = ({ product, onAddToCart }) => {
+const ProductCard = ({ product = {}, onAddToCart = () => {}, view = "horizontal", modeRate = false }) => {
   const navigate = useNavigate();
-  const priceAsNumber = parseFloat(product.price_per_day);
-  const finalPriceAsNumber = product.sale_percentage
-    ? priceAsNumber * (1 - product.sale_percentage / 100)
-    : priceAsNumber;
+
+  // Helpers
+  const toNumber = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const formatPrice = (val) => {
+    const n = Math.round(toNumber(val));
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " đ";
+  };
+
+  // Resolve image(s)
+  const images = useMemo(() => {
+    if (!product) return [];
+    if (Array.isArray(product.images) && product.images.length) return product.images;
+    if (typeof product.images === "string" && product.images) return [product.images];
+    if (product.IMAGE_URL) return [product.IMAGE_URL];
+    if (product.image) return [product.image];
+    return [];
+  }, [product]);
+
+  // Resolve price and sale data
+  const { originalPrice, salePercentage, finalPrice } = useMemo(() => {
+    // various possible fields
+    const priceCandidates = [
+      product.price,
+      product.price_per_day,
+      product.PRICE,
+      product.Price,
+      product.cost,
+      product.pricePerUnit,
+      product.px,
+      product.Px,
+    ];
+    let base = priceCandidates.map(toNumber).find((n) => n > 0) ?? 0;
+    const sale = (product.sale_percentage ?? product.sale ?? product.discount ?? 0);
+    const saleNum = toNumber(sale);
+    const final = saleNum > 0 ? Math.round(base * (1 - saleNum / 100)) : Math.round(base);
+    return { originalPrice: base, salePercentage: saleNum, finalPrice: final };
+  }, [product]);
 
   const handleCardClick = () => {
-    navigate(`/product/${product.product_id}`);
+    const id = product.product_id ?? product.barcode ?? product.id ?? product.sku ?? product.Bar_code;
+    navigate(`/product/${encodeURIComponent(id ?? "")}`);
   };
 
   const handleAddToCartClick = (e) => {
-    e.stopPropagation(); // Prevent navigation when clicking the button
+    e.stopPropagation();
     onAddToCart(product);
   };
 
+  const thumb = images[0] ?? "";
 
-    const handleClick = () => {
-        navigate(`/product/${product.product_id || 1}`);
-    };
-    console.log("Product: "+ product)
+  return (
+    <div
+      onClick={handleCardClick}
+      className="rounded-lg h-full w-full transition-transform duration-200 ease-in-out hover:scale-105 hover:z-10 hover:cursor-pointer hover:ring-2 ring-gray-200 bg-white overflow-hidden"
+    >
+      <div className="w-full h-48 flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden">
+        {thumb ? (
+          // eslint-disable-next-line jsx-a11y/img-redundant-alt
+          <img src={thumb} alt={product.name ?? "product image"} className="w-full h-full object-cover" />
+        ) : (
+          <div className="text-gray-400 text-sm">No image</div>
+        )}
+      </div>
 
-    return (
-        <>
-            <div 
-                onClick={handleClick}
-                className="rounded-lg h-full w-full
-                transition-transform duration-300 ease-in-out hover:scale-105 hover:z-10 hover:cursor-pointer hover:ring-2 ring-gray-700" 
+      <div className="p-2">
+        <h2 className="line-clamp-2 text-[1rem] font-semibold text-gray-900 mb-1">{product.name ?? product.productName ?? "Untitled product"}</h2>
+
+        {/* rating / optional */}
+        {modeRate && product.avgRating != null && (
+          <div className="text-sm text-yellow-500 mb-1">{Number(product.avgRating).toFixed(1)} ★</div>
+        )}
+
+        <div className="flex items-center gap-3 justify-between">
+          <div className="flex items-center gap-2">
+            {salePercentage > 0 ? (
+              <>
+                <div className="text-indigo-700 font-bold">{formatPrice(finalPrice)}</div>
+                <div className="line-through text-gray-400 text-sm">{formatPrice(originalPrice)}</div>
+                <div className="ml-1 px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">-{salePercentage}%</div>
+              </>
+            ) : (
+              <div className="text-indigo-700 font-bold">{formatPrice(originalPrice)}</div>
+            )}
+          </div>
+
+          <div>
+            <button
+              onClick={handleAddToCartClick}
+              className="bg-red-600 text-white px-3 py-1 rounded-md text-sm hover:brightness-95"
+              aria-label="Add to cart"
             >
-                <div className="w-full h-48 flex items-center justify-center bg-linear-to-b from-gray-300 to-gray-200 rounded-lg overflow-hidden">
-                    <img
-                        src={product.images[0]}
-                        alt="Product Image"
-                        className="w-full h-full object-cover"
-                    />
-                </div>
-                <h2 className="p-2 line-clamp-2 wrap-break-word text-[1.2rem] font-bold">{product.name}</h2>
-                {/* <div className="px-2 py-1"><StarRating modeRate={modeRate}/></div> */}
-                <div className="flex justify-start items-center p-2 pt-0 text-lg md:text-2xl font-bold flex-wrap">
-                    {product.sale_percentage ? (
-                        <div className="flex justify-start items-center gap-2 flex-wrap">
-                            <span>${finalPriceDisplay}</span>
-                            {view === 'horizontal' && (
-                                <span className='line-through text-gray-300 text-base md:text-xl'>${originalPriceDisplay}</span>
-                            )}
-                            <button className='rounded-3xl cursor-default px-3 py-1 text-sm md:text-base bg-red-100 text-red-400'>-{product.sale_percentage}%</button>
-                        </div>
-                    ) : (
-                        <span>${originalPriceDisplay}</span>
-                    )}
-                </div>
-            </div>
-        </>
-    )
-}
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-export default ProductCard
+export default ProductCard;

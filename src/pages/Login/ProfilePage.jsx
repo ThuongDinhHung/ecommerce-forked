@@ -169,7 +169,7 @@ export default function ProfilePage() {
 									</div>
 									<div>
 										<div className={label}>License</div>
-										<div className={value}>{shipper.License || '-'}</div>
+										<div className={value}>{shipper.LicensePlate || '-'}</div>
 									</div>
 								</div>
 							</section>

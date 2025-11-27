@@ -1,151 +1,195 @@
+// ...existing code...
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
-import ProductList from '../../components/product/ProductList';
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import ProductReviews from '../../components/product/ProductReviews';
 
 const HomePage = () => {
-    const navigate = useNavigate();
-    const [viewMode, setViewMode] = useState({
-        recommend: 'horizontal',
-        recent: 'horizontal'
-    });
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get('search')?.trim() || '';
 
-    const comments = [
-        {
-            rating: 4.5,
-            name: "Samantha D.",
-            verified: true,
-            comment: "I absolutely love this t-shirt! The design is unique and the fabric feels so comfortable. As a fellow designer, I appreciate the attention to detail. It's become my favorite go-to shirt.",
-            date: "August 14, 2023"
-        },
-        {
-            rating: 4,
-            name: "Alex M.",
-            verified: true,
-            comment: "The t-shirt exceeded my expectations! The colors are vibrant and the print quality is top-notch. Being a UI/UX designer myself, I'm quite picky about aesthetics, and this t-shirt definitely gets a thumbs up from me.",
-            date: "August 15, 2023"
-        },
-        {
-            rating: 3.5,
-            name: "Ethan R.",
-            verified: true,
-            comment: "This t-shirt is a must-have for anyone who appreciates good design. The minimalistic yet stylish pattern caught my eye, and the fit is perfect. I can see the designer's touch in every aspect of this shirt.",
-            date: "August 16, 2023"
-        },
-        {
-            rating: 4,
-            name: "Olivia P.",
-            verified: true,
-            comment: "As a UI/UX enthusiast, I value simplicity and functionality. This t-shirt not only represents those principles but also feels great to wear. It's evident that the designer poured their creativity into making this t-shirt stand out.",
-            date: "August 17, 2023"
-        },
-        {
-            rating: 4,
-            name: "Liam K.",
-            verified: true,
-            comment: "This t-shirt is a fusion of comfort and creativity. The fabric is soft, and the design speaks volumes about the designer's skill. It's like wearing a piece of art that reflects my passion for both design and fashion.",
-            date: "August 18, 2023"
-        },
-        {
-            rating: 4.5,
-            name: "Ava H.",
-            verified: true,
-            comment: "I'm not just wearing a t-shirt; I'm wearing a piece of design philosophy. The intricate details and thoughtful layout of the design make this shirt a conversation starter.",
-            date: "August 19, 2023"
-        }
-    ];
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-    const [productList, setProductList] = useState([]);
-    // Get search params from URL
-    const [searchParams] = useSearchParams();
-    const searchQuery = searchParams.get('search') || '';
+  // load categories
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/products/categories')
+      .then((r) => r.ok ? r.json() : Promise.reject(r))
+      .then((data) => {
+        if (!mounted) return;
+        // support payloads like { data: { categories: [...] } } or simple array
+        const list = data?.data?.categories || data?.categories || data || [];
+        setCategories(Array.isArray(list) ? list : []);
+      })
+      .catch((err) => {
+        console.error('Failed to load categories', err);
+      });
+    return () => { mounted = false; };
+  }, []);
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-            try {
-                const response = await fetch('api/products/', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('PRODUCT DATA LIST:', data);
-                    setProductList(data.data.products);
-                } else {
-                    console.error('Failed to fetch products. Status:', response.status);
-                }
-            } catch (error) {
-                console.error('Error fetching products:', error);
-            }
+  // load products: priority -> search query -> selected category -> all
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let url = '/api/products/all';
+        if (query) {
+            url = `/api/products/search?name=${encodeURIComponent(query)}`;
+        } else if (selectedCategory) {
+            // --- FIX: Change this line to match the new backend route ---
+            url = `/api/products/category/${encodeURIComponent(selectedCategory)}`;
         }
 
-        fetchProducts();
-    }, []);
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
+        // normalize response shapes
+        const list = data?.data?.products || data?.products || data?.data || data || [];
+        const normalized = (Array.isArray(list) ? list : []).map((p) => ({
+          id: p.id ?? p.barcode ?? p.Bar_code ?? p.sku,
+          barcode: p.barcode ?? p.Bar_code ?? p.id ?? p.sku,
+          name: p.name ?? p.productName ?? p.productname ?? p.Name ?? p.title ?? 'Unnamed product',
+          image: p.image ?? p.images?.[0] ?? p.IMAGE_URL ?? p.imageUrl ?? null,
+          price: p.price ?? p.PRICE ?? p.cost ?? 0,
+          rating: p.rating ?? p.avgRating ?? p.AvgRating ?? p.Avg_Rating ?? 0,
+        }));
+        setProducts(normalized);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error(err);
+          setError('Failed to load products');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [query, selectedCategory]);
 
-    const filteredProducts = productList.filter(product => 
-        product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  const openProduct = (p) => {
+    const code = p.barcode || p.id;
+    if (code) navigate(`/product/${code}`);
+  };
 
-    const changeMode = (viewName) => {
-        setViewMode(prev => ({
-            ...prev,
-            [viewName]: prev[viewName] === 'horizontal' ? 'vertical' : 'horizontal'
-        }))
-    }
+  const formatPrice = (val) => {
+    const n = Math.round(Number(val) || 0);
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' đ';
+  };
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <Header showNav={true}/>
-            
-            <main className="max-w-6xl mx-auto p-6">
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
 
-                {/* Newest Products Section */}
-                <section className="mb-12">
-                    <h2 className="text-2xl md:text-3xl font-bold mb-6 text-black">Suggested Products</h2>
-                    <div className="bg-white rounded-lg shadow-md p-6">
-                        {filteredProducts.length === 0 ? (
-                            <p className="text-center text-gray-500 py-8">No available products found.</p>
-                        ) : 
-                            <ProductList View={viewMode.recommend} Products={filteredProducts} modeRate={false}/>
-                        }
+      <main className="max-w-6xl mx-auto p-6">
+        <section className="mb-6">
+          <div className="rounded-lg p-6 bg-white shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-extrabold text-gray-900">
+                {query ? `Search results for "${query}"` : selectedCategory ? selectedCategory : 'Discover products'}
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {query
+                  ? `Results for "${query}". ${products.length} items.`
+                  : selectedCategory
+                  ? `${products.length} items in ${selectedCategory}.`
+                  : `${products.length} products available.`}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setSelectedCategory(''); }}
+                className="px-4 py-2 rounded-full bg-white border hover:shadow-sm"
+              >
+                All
+              </button>
+              <button
+                onClick={() => { /* placeholder: could toggle sort/view */ }}
+                className="px-4 py-2 rounded-full bg-white border hover:shadow-sm"
+              >
+                Toggle View
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Categories row */}
+        <section className="mb-6">
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {categories.length === 0 ? (
+              <div className="text-sm text-gray-500">No categories</div>
+            ) : (
+              categories.map((cat) => {
+                const active = cat === selectedCategory;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory((prev) => (prev === cat ? '' : cat))}
+                    className={`flex-shrink-0 px-4 py-2 rounded-full border ${active ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700'} shadow-sm`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {/* Product grid */}
+        <section>
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="animate-pulse p-4 bg-white rounded-lg">
+                  <div className="h-36 bg-gray-200 rounded-md mb-3" />
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                  <div className="h-4 bg-gray-200 rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="text-red-600">{error}</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                {products.map((p) => (
+                    <div
+                    key={p.id || p.barcode}
+                    className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer hover:shadow-md"
+                    onClick={() => openProduct(p)}
+                    >
+                    <div className="h-44 bg-gray-100 flex items-center justify-center">
+                        {p.image ? (
+                        <img src={p.image} alt={p.name} className="max-h-40 object-contain" />
+                        ) : (
+                        <div className="text-gray-400 text-sm">No image</div>
+                        )}
                     </div>
-                    <div className="flex justify-center mt-6">
-                        <button className="px-8 py-2 font-medium text-sm md:text-base text-black bg-white 
-                                rounded-full border-2 border-gray-300 shadow-sm
-                                hover:scale-105 transition-transform duration-300 ease-in-out"
-                                onClick={() => changeMode('recommend')}>
-                            {viewMode.recommend === 'horizontal' ? 'View All' : 'View Less'}
-                        </button>
+                    <div className="p-3">
+                        <div className="font-medium text-sm text-gray-900 truncate">{p.name}</div>
+                        <div className="mt-1 flex items-center justify-between">
+                        <div className="text-indigo-600 font-semibold">{formatPrice(p.price)}</div>
+                        <div className="text-xs text-gray-500">{p.rating ? `${p.rating} ★` : '—'}</div>
+                        </div>
                     </div>
-                </section>
+                    </div>
+                ))}
+            </div>
+          )}
+        </section>
+      </main>
 
-                {/* Top-Selling Products Section */}
-                <section className="mb-12">
-                    <h2 className="text-2xl md:text-3xl font-bold mb-6 text-black">Top-Selling Product</h2>
-                    <div className="bg-white rounded-lg shadow-md p-6">
-                        {filteredProducts.length === 0 ? (
-                            <p className="text-center text-gray-500 py-8">No available products found.</p>
-                        ) : 
-                            <ProductList View={viewMode.recent} Products={filteredProducts} modeRate={false}/>
-                        }
-                    </div>
-                    <div className="flex justify-center mt-6">
-                        <button className="px-8 py-2 font-medium text-sm md:text-base text-black bg-white 
-                                rounded-full border-2 border-gray-300 shadow-sm
-                                hover:scale-105 transition-transform duration-300 ease-in-out"
-                                onClick={() => changeMode('recent')}>
-                            {viewMode.recent === 'horizontal' ? 'View All' : 'View Less'}
-                        </button>
-                    </div>
-                </section>
-            </main>
-
-            <Footer />
-        </div>
-    )
-}
+      <Footer />
+    </div>
+  );
+};
 
 export default HomePage;

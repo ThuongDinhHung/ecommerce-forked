@@ -17,6 +17,7 @@ import AddProductPage from './pages/Seller/AddProductPage';
 import ProfilePage from './pages/Login/ProfilePage';
 import WriteReview from './pages/Review/WriteReview';
 import LoginPage from './pages/Login/LoginPage';
+import ProductListingPage from './pages/Products/ProductListingPage';
 
 function App() {
   return (
@@ -106,7 +107,12 @@ function App() {
           <ProfilePage />
         </ProtectedRoute>
       } />
-      {/* <Route path="/products" element={
+      
+      <Route path="/product/:barcode" element={
+        <ProtectedRoute>
+          <ProductListingPage />
+        </ProtectedRoute>
+      } />
 
       {/* Reviews Routes */}
       <Route path="/product/:productId/reviews" element={
@@ -121,7 +127,7 @@ function App() {
         </ProtectedRoute>
       } />
 
-      <Route path="/review" element={
+      <Route path="product/review" element={
         <ProtectedRoute>
           <ProductReviews />
         </ProtectedRoute>

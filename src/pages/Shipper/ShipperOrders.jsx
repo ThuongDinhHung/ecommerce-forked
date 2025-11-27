@@ -1,49 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../../components/header/Header';
 import Footer from '../../components/footer/Footer';
-import { getAllOrders, claimOrder, updateOrderStatus } from '../../services/shipperOrdersService';
-
-function StatusBadge({ status }) {
-  const color = {
-    Pending: 'bg-gray-100 text-gray-700',
-    Processing: 'bg-amber-100 text-amber-800',
-    Dispatched: 'bg-blue-100 text-blue-800',
-    Delivering: 'bg-indigo-100 text-indigo-800',
-    Delivered: 'bg-emerald-100 text-emerald-800',
-    Completed: 'bg-green-100 text-green-800',
-  }[status] || 'bg-slate-100 text-slate-800';
-
-  return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{status}</span>;
-}
-
-function OrderCard({ order, actions }) {
-  return (
-    <div className="border rounded-lg p-4 shadow-sm bg-white">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-slate-500">Order ID</p>
-          <p className="font-semibold text-slate-900">{order.id || order.Id || order.orderId}</p>
-        </div>
-        <StatusBadge status={order.status || order.Status} />
-      </div>
-      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-        <div>
-          <p className="text-slate-500">Seller</p>
-          <p className="text-slate-900">{order.sellerName || order.SellerName || '-'}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Buyer</p>
-          <p className="text-slate-900">{order.buyerName || order.BuyerName || '-'}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Total</p>
-          <p className="text-slate-900">{order.total ? `$${order.total.toFixed(2)}` : (order.Total || '-')}</p>
-        </div>
-      </div>
-      {actions}
-    </div>
-  );
-}
+import OrderCard from '../../components/order/OrderCard';
+import { getOrdersByStatus, getOrdersByStatuses, claimOrder, updateOrderStatus } from '../../services/shipperOrdersService';
 
 export default function ShipperOrders() {
   const [loading, setLoading] = useState(true);
@@ -56,16 +15,10 @@ export default function ShipperOrders() {
     try {
       setLoading(true);
       setError('');
-      const all = await getAllOrders();
-      // Filter client-side based on status field
-      const processing = all.filter(o => {
-        const s = (o.status || o.Status || '').toString();
-        return s === 'Processing';
-      });
-      const mine = all.filter(o => {
-        const s = (o.status || o.Status || '').toString();
-        return s === 'Dispatched' || s === 'Delivering';
-      });
+      const [processing, mine] = await Promise.all([
+        getOrdersByStatus('Processing'),
+        getOrdersByStatuses(['Dispatched', 'Delivering']),
+      ]);
       setAvailable(processing);
       setActive(mine);
     } catch (e) {
