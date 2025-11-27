@@ -18,7 +18,7 @@ import ProfilePage from './pages/Login/ProfilePage';
 import WriteReview from './pages/Review/WriteReview';
 import LoginPage from './pages/Login/LoginPage';
 import ProductListingPage from './pages/Products/ProductListingPage';
-
+import OrderDashboardPage from './pages/Seller/OrderDashboardPage';
 function App() {
   return (
     <Routes>
@@ -84,6 +84,12 @@ function App() {
       } />
 
       <Route path="/seller" element={<Navigate to="/seller/seller-dashboard" replace />} />
+
+      <Route path="/seller/orders" element={
+        <ProtectedRoute>
+          <OrderDashboardPage />
+        </ProtectedRoute>
+      } />
 
       <Route path="/seller/add-product" element={
         <ProtectedRoute>

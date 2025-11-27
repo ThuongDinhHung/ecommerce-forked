@@ -16,6 +16,7 @@ const SellerDashboardPage = () => {
   const [limit] = useState(20);
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState(1);
+  const [imageErrors, setImageErrors] = useState({}); // Track failed image loads
   const mountedRef = useRef(true);
   const searchRef = useRef(null);
   const navigate = useNavigate();
@@ -136,6 +137,21 @@ const SellerDashboardPage = () => {
     });
   };
 
+  // Handle image load errors (fallback to placeholder)
+  const handleImageError = (barCode) => {
+    setImageErrors(prev => ({ ...prev, [barCode]: true }));
+  };
+
+  // Get image URL with fallback
+  const getProductImageUrl = (product) => {
+    // If this image already failed to load, skip it
+    if (imageErrors[product.Bar_code]) {
+      return null; // Will display placeholder
+    }
+    // Try primary IMAGE_URL first, then first image from images array
+    return product.IMAGE_URL || (product.images && product.images.length > 0 ? product.images[0] : null);
+  };
+
   // Actions (edit/delete)
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this product? This action cannot be undone.')) return;
@@ -208,7 +224,14 @@ const SellerDashboardPage = () => {
           <ul>
             <li className="mb-2"><a href="#" className="flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded">Dashboard</a></li>
             <li className="mb-2"><a href="#" className="flex items-center p-2 text-blue-600 bg-blue-50 rounded">Products</a></li>
-            <li className="mb-2"><a href="#" className="flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded">Orders</a></li>
+            <li className="mb-2">
+              <button 
+                onClick={() => navigate('/seller/orders')}
+                className="w-full flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded"
+              >
+                Orders
+              </button>
+            </li>
             <li className="mb-2"><a href="#" className="flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded">Analytics</a></li>
             <li className="mb-2"><a href="#" className="flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded">Settings</a></li>
           </ul>
@@ -326,7 +349,18 @@ const SellerDashboardPage = () => {
                   <td className="p-4"><input type="checkbox" /></td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <img src={product.IMAGE_URL || (product.images && product.images.length ? product.images[0] : '')} alt={product.Name} className="w-10 h-10 rounded-md mr-4" />
+                      {getProductImageUrl(product) ? (
+                        <img 
+                          src={getProductImageUrl(product)} 
+                          alt={product.Name} 
+                          onError={() => handleImageError(product.Bar_code)}
+                          className="w-10 h-10 rounded-md mr-4 object-cover" 
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-md mr-4 bg-gray-200 flex items-center justify-center text-xs text-gray-400">
+                          No Image
+                        </div>
+                      )}
                       <div>
                         <p className="font-semibold text-gray-900">{product.Name || 'Unnamed product'}</p>
                         <p className="text-sm text-gray-500">{product.Bar_code}</p>

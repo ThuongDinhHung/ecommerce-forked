@@ -9,6 +9,7 @@ const AddProductPage = () => {
 
   // Initialize state (supports simple edit mode if `location.state.product` is passed)
   const initial = location?.state?.product || {};
+  const barCode = initial?.Bar_code || ''; // Extract barCode for edit mode
   const [productName, setProductName] = useState(initial.Name || '');
   const [description, setDescription] = useState(initial.Description || '');
   const [originalPrice, setOriginalPrice] = useState('');
@@ -92,7 +93,7 @@ const AddProductPage = () => {
     setErrorMessage('');
     // Basic validation
     if (!productName) {
-      setErrorMessage('Please provide at least a Product Name and Bar Code.');
+      setErrorMessage('Please provide at least a Product Name.');
       return;
     }
     // Validate variants: at least one variant, each with name and numeric price
@@ -124,7 +125,7 @@ const AddProductPage = () => {
         });
 
         const uploadData = await uploadRes.json();
-        
+
         if (!uploadRes.ok) {
           setErrorMessage(uploadData?.message || 'Image upload failed');
           setLoading(false);
@@ -136,7 +137,8 @@ const AddProductPage = () => {
           imageUrls = uploadData.data.files.map(file => file.url);
         }
       }
-
+      // Note: Image file upload is currently disabled. To add images, upload to an external service
+      // and pass the URLs via the payload.images array, or use the file selection to collect URLs.
       const payload = {
         Name: productName,
         Description: description,
@@ -145,13 +147,19 @@ const AddProductPage = () => {
         variations: variants.map(v => ({ NAME: v.name, PRICE: Number(v.price), STOCK: Number(v.stock) })),
       };
       
-      // Add image URLs to payload if we have any
-      if (imageUrls.length > 0) {
-        payload.images = imageUrls;
-      }
+      // For create: backend will auto-generate barCode, so we don't include it in payload
+      // For update: barCode is in the URL, not in the payload
+      
+      // Note: selectedFiles are collected but not uploaded. 
+      // To support file uploads, integrate with an external storage service (S3, Cloudinary, etc.)
+      // and populate images with public URLs.
       
       if (selectedCategory && typeof selectedCategory === 'string') {
         payload.category = selectedCategory;
+      }
+
+      if (imageUrls.length > 0) {
+        payload.images = imageUrls;
       }
 
       console.log('Product Details to be sent:', payload);
@@ -258,6 +266,20 @@ const AddProductPage = () => {
                    disabled={viewOnly}
                  />
               </div>
+              {/* Bar Code - shown only in edit/view mode, auto-generated on create */}
+              {isEdit && (
+                <div className="mb-6">
+                  <label htmlFor="barCode" className="block text-sm font-medium text-gray-700 mb-2">Bar Code</label>
+                  <input
+                    type="text"
+                    id="barCode"
+                    value={barCode}
+                    className="w-full px-4 py-2 border rounded-lg bg-gray-100 text-gray-800 cursor-not-allowed"
+                    disabled={true}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Bar codes are auto-generated and cannot be changed.</p>
+                </div>
+              )}
               {/* Manufacturing and Expiry dates - these map to Product_SKU.Manufacturing_date and Expired_date */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div>
@@ -347,7 +369,7 @@ const AddProductPage = () => {
                         <input type="text" value={v.name} onChange={(e)=>handleVariantChange(idx, 'name', e.target.value)} placeholder="e.g. Red-L" className="w-full px-3 py-2 border rounded-lg bg-gray-50 text-gray-800" disabled={viewOnly} />
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-700 mb-1">Price ($)</label>
+                        <label className="block text-sm text-gray-700 mb-1">Price (đ)</label>
                         <input type="number" min="0" step="0.01" value={v.price} onChange={(e)=>handleVariantChange(idx, 'price', e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-gray-50 text-gray-800" disabled={viewOnly} />
                       </div>
                       <div>
